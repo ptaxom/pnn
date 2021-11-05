@@ -1,3 +1,9 @@
+use pnn::parsers::parse_file;
+
+
 fn main() {
-    println!("Hello, world!");
+    let filename = String::from("./cfgs/tests/base.cfg");
+    let config = parse_file(&filename).unwrap();
+    
+    println!("Hello wor");
 }
