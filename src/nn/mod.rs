@@ -1,2 +1,3 @@
 pub mod shape;
-pub mod layers;
+mod layers;
+pub use layers::*;

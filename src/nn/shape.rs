@@ -57,20 +57,20 @@ pub struct LayerShape {
 }
 
 impl LayerShape {
-    fn new(dims: Vec<usize>) -> Self{
+    pub fn new(dims: Vec<usize>) -> Self{
         assert!(dims.len() > 1 && dims.len() < 5);
         Self{dims}
     }
 
-    fn from_nc(n: usize, c: usize) -> Self {
+    pub fn from_nc(n: usize, c: usize) -> Self {
         Self{dims: vec![n, c]}
     }
 
-    fn from_nch(n: usize, c: usize, h: usize) -> Self {
+    pub fn from_nch(n: usize, c: usize, h: usize) -> Self {
         Self{dims: vec![n, c, h]}
     }
 
-    fn from_nchw(n: usize, c: usize, h: usize, w: usize) -> Self {
+    pub fn from_nchw(n: usize, c: usize, h: usize, w: usize) -> Self {
         Self{dims: vec![n, c, h, w]}
     }
 }

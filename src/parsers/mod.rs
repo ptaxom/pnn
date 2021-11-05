@@ -1,40 +1,15 @@
 use std::{
     fs::File,
     collections::HashMap,
-    io::{Read,
-        self,
-    },
-    fmt,
+    io::{Read, self},
     error::Error,
     self};
 use regex::Regex;
 
+mod errors;
+pub use errors::*;
+
 pub type NNConfig = Vec<HashMap<String, String>>; // Currently support only for sequential NNs
-
-#[derive(Debug)]
-pub struct ParseError {
-    description: String,
-}
-
-impl ParseError {
-    fn generate<T>(err: &str) -> Result<T, Box<dyn Error>> {
-        Err(
-            Box::new(
-                ParseError {description: String::from("Couldnt parse line ") + err}
-            )
-        )
-    }
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.description)
-    }
-}
-
-impl Error for ParseError {}
-
-
 
 pub fn parse_file(filename: &str) -> Result<NNConfig, Box<dyn Error>> {
     let mut file = File::open(filename)?;
@@ -77,6 +52,21 @@ pub fn parse_file(filename: &str) -> Result<NNConfig, Box<dyn Error>> {
     Ok(config)
 }
 
+pub fn parse_numerical_field<T>(config: &HashMap<String, String>, key: &str, mandatory: bool, default: Option<T>) -> Result<Option<T>, DeserializationError> 
+where T: std::str::FromStr
+{
+    let str_value = config.get(key);
+    match str_value {
+        Some(x) => match x.parse::<T>() {
+            Ok(value) => return Ok(Some(value)),
+            Err(_) => return Err(DeserializationError{description: format!("Couldnt parse '{}' for key '{}'", x, key)})
+        },
+        None => match mandatory {
+            true => return Err(DeserializationError{description: format!("Key '{}' is mandatory", key)}),
+            false => return Ok(default)
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
