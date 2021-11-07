@@ -475,7 +475,6 @@ pub fn cudaMalloc(size: usize) -> Result<*mut c_void, cudaError> {
 
 pub fn cudaFree(ptr: *mut c_void) -> Result<(), cudaError> {
     use pnn_sys::cudaFree;
-    extern crate libc;
 
     unsafe {
         let res = cudaFree(ptr);
@@ -490,7 +489,6 @@ pub use pnn_sys::{cudnnHandle_t, cudnnTensorDescriptor_t, cudnnTensorFormat_t};
 
 pub fn cudnnCreate() -> Result<cudnnHandle_t, cudnnError> {
     use pnn_sys::cudnnCreate;
-    extern crate libc;
 
     unsafe {
         let mut ptr: cudnnHandle_t = std::ptr::null_mut() as cudnnHandle_t;
@@ -504,7 +502,6 @@ pub fn cudnnCreate() -> Result<cudnnHandle_t, cudnnError> {
 
 pub fn cudnnDestroy(handle: cudnnHandle_t) -> Result<(), cudnnError> {
     use pnn_sys::cudnnDestroy;
-    extern crate libc;
 
     unsafe {
         let res = cudnnDestroy(handle);
@@ -517,7 +514,6 @@ pub fn cudnnDestroy(handle: cudnnHandle_t) -> Result<(), cudnnError> {
 
 pub fn cudnnCreateTensorDescriptor() -> Result<cudnnTensorDescriptor_t, cudnnError> {
     use pnn_sys::cudnnCreateTensorDescriptor;
-    extern crate libc;
 
     unsafe {
         let mut ptr: cudnnTensorDescriptor_t = std::ptr::null_mut() as cudnnTensorDescriptor_t;
@@ -531,7 +527,6 @@ pub fn cudnnCreateTensorDescriptor() -> Result<cudnnTensorDescriptor_t, cudnnErr
 
 pub fn cudnnDestroyTensorDescriptor(tensorDesc: cudnnTensorDescriptor_t) -> Result<(), cudnnError> {
     use pnn_sys::cudnnDestroyTensorDescriptor;
-    extern crate libc;
 
     unsafe {
         let res = cudnnDestroyTensorDescriptor(tensorDesc);
@@ -569,7 +564,6 @@ pub fn cudnnSetTensor4dDescriptor(
         cudnnTensorFormat_t_CUDNN_TENSOR_NCHW, 
         cudnnDataType_t
     };
-    extern crate libc;
 
     unsafe {
         let res = cudnnSetTensor4dDescriptor(
@@ -584,6 +578,31 @@ pub fn cudnnSetTensor4dDescriptor(
         match  res{
             0 => Ok(()),
             x => Err(cudnnError::from(x))
+        }
+    }
+}
+
+pub enum cudaMemcpyKind {
+    HostToHost = 0,
+    HostToDevice = 1,
+    DeviceToHost = 2,
+    DeviceToDevice = 3,
+    Default = 4,
+}
+
+pub fn cudaMemcpy(
+    dst: *mut c_void,
+    src: *const c_void,
+    count: usize,
+    kind: cudaMemcpyKind,
+) -> Result<(), cudaError> {
+    use pnn_sys::cudaMemcpy;
+
+    unsafe {
+        let res = cudaMemcpy(dst, src, count, kind as u32);
+        match  res{
+            0 => Ok(()),
+            x => Err(cudaError::from(x))
         }
     }
 }

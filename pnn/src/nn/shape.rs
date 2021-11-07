@@ -9,7 +9,7 @@ use core::fmt::Debug;
 
 #[derive(Debug)]
 pub struct ShapeError {
-    description: String,
+    pub description: String,
 }
 
 impl fmt::Display for ShapeError {
@@ -20,7 +20,7 @@ impl fmt::Display for ShapeError {
 
 impl Error for ShapeError {}
 
-pub trait Shape {
+pub trait Shape: fmt::Display {
     fn N(&self) -> usize;
 
     fn C(&self) -> usize;
@@ -140,6 +140,13 @@ impl Shape for LayerShape {
 impl PartialEq for LayerShape {
     fn eq(&self, other: &Self) -> bool {
         self.dims() == other.dims()
+    }
+}
+
+impl fmt::Display for LayerShape {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let dims_as_str: Vec<String> = self.dims.iter().map(|x| {x.to_string()}).collect();
+        write!(f, "LayerShape[{}]", dims_as_str.join("x"))
     }
 }
 
@@ -295,5 +302,11 @@ mod tests {
         let shape1 = LayerShape::from_nchw(32, 32, 64, 65);
         let shape2 = LayerShape::new(vec![32, 33, 64, 64]);
         shape1.concat(&shape2, 1).unwrap();
+    }
+
+    #[test]
+    fn test_display() {
+        let shape = LayerShape::from_nchw(32, 256, 7, 7);
+        assert_eq!(shape.to_string(), "LayerShape[32x256x7x7]");
     }
 }

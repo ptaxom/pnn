@@ -9,8 +9,11 @@ fn main() {
     // cudnnDestroy(kek);
     // std::thread::sleep(std::time::Duration::from_secs(5));
     {
-        let shape = Box::new(LayerShape::from_nchw(1, 3, 1920, 1080));
-        let tensor = Tensor::new(shape);
+        let shape = Box::new(LayerShape::from_nchw(1, 1, 1, 4));
+        let mut tensor = Tensor::new(shape).unwrap();
+        let data: Vec<f32> = vec![1., 2., 3., 4.];
+        tensor.load(&data).unwrap();
+        println!("{}", tensor);
         std::thread::sleep(std::time::Duration::from_secs(5));
     }
     
