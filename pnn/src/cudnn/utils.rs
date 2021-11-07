@@ -606,3 +606,34 @@ pub fn cudaMemcpy(
         }
     }
 }
+
+// Implement C = A * alpha + C * beta
+pub fn cudnnAddTensor(
+    handle: cudnnHandle_t,
+    alpha: f32,
+    aDesc: cudnnTensorDescriptor_t,
+    A: *const ::std::os::raw::c_void,
+    beta: f32,
+    cDesc: cudnnTensorDescriptor_t,
+    C: *mut ::std::os::raw::c_void,
+) -> Result<(), cudnnError> {
+    use pnn_sys::{
+        cudnnAddTensor,
+    };
+
+    unsafe {
+        let res = cudnnAddTensor(
+            handle,
+            std::ptr::addr_of!(alpha) as *const c_void, 
+            aDesc,
+            A,
+            std::ptr::addr_of!(beta) as *const c_void,
+            cDesc,
+            C
+        );
+        match  res{
+            0 => Ok(()),
+            x => Err(cudnnError::from(x))
+        }
+    }
+}

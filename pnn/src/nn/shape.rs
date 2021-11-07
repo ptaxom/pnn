@@ -46,7 +46,7 @@ impl Debug for dyn Shape {
 }
 
 // Representing shape of layer
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LayerShape {
     // Storing shape of layer in format NCHW, where
     // N - batch size,

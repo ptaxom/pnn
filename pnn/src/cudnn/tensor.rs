@@ -95,3 +95,8 @@ impl fmt::Display for Tensor {
         write!(f, "Tensor with {}. Data: [{}]", self.shape, content.join("x"))
     }
 }
+
+pub fn add(handle: cudnnHandle_t, a: &Tensor, b: &mut Tensor) -> Result<(), cudnnError> {
+    cudnnAddTensor(handle, 1., a.tensor_desc, a.device_data_ptr, 1., b.tensor_desc, b.device_data_ptr)?;
+    Ok(())
+}
