@@ -236,7 +236,9 @@ name = "pnn"
 version = "0.1.0"
 dependencies = [
  "itertools",
+ "libc",
  "md5",
+ "pnn-sys",
  "regex",
 ]
 
