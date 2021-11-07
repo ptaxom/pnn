@@ -486,7 +486,7 @@ pub fn cudaFree(ptr: *mut c_void) -> Result<(), cudaError> {
     }
 }
 
-pub use pnn_sys::{cudnnHandle_t};
+pub use pnn_sys::{cudnnHandle_t, cudnnTensorDescriptor_t, cudnnTensorFormat_t};
 
 pub fn cudnnCreate() -> Result<cudnnHandle_t, cudnnError> {
     use pnn_sys::cudnnCreate;
@@ -508,6 +508,79 @@ pub fn cudnnDestroy(handle: cudnnHandle_t) -> Result<(), cudnnError> {
 
     unsafe {
         let res = cudnnDestroy(handle);
+        match  res{
+            0 => Ok(()),
+            x => Err(cudnnError::from(x))
+        }
+    }
+}
+
+pub fn cudnnCreateTensorDescriptor() -> Result<cudnnTensorDescriptor_t, cudnnError> {
+    use pnn_sys::cudnnCreateTensorDescriptor;
+    extern crate libc;
+
+    unsafe {
+        let mut ptr: cudnnTensorDescriptor_t = std::ptr::null_mut() as cudnnTensorDescriptor_t;
+        let res = cudnnCreateTensorDescriptor(&mut ptr as *mut cudnnTensorDescriptor_t);
+        match  res{
+            0 => Ok(ptr),
+            x => Err(cudnnError::from(x))
+        }
+    }
+}
+
+pub fn cudnnDestroyTensorDescriptor(tensorDesc: cudnnTensorDescriptor_t) -> Result<(), cudnnError> {
+    use pnn_sys::cudnnDestroyTensorDescriptor;
+    extern crate libc;
+
+    unsafe {
+        let res = cudnnDestroyTensorDescriptor(tensorDesc);
+        match  res{
+            0 => Ok(()),
+            x => Err(cudnnError::from(x))
+        }
+    }
+}
+
+pub enum cudnnDataType {
+    FLOAT = 0,
+    DOUBLE = 1,
+    HALF = 2,
+    INT8 = 3,
+    INT32 = 4,
+    INT8x4 = 5,
+    UINT8 = 6,
+    UINT8x4 = 7,
+    INT8x32 = 8,
+    BFLOAT16 = 9,
+    INT64 = 10
+}
+
+pub fn cudnnSetTensor4dDescriptor(
+    tensorDesc: cudnnTensorDescriptor_t,
+    data_type: cudnnDataType,
+    n: usize,
+    c: usize,
+    h: usize,
+    w: usize,
+) -> Result<(), cudnnError> {
+    use pnn_sys::{
+        cudnnSetTensor4dDescriptor, 
+        cudnnTensorFormat_t_CUDNN_TENSOR_NCHW, 
+        cudnnDataType_t
+    };
+    extern crate libc;
+
+    unsafe {
+        let res = cudnnSetTensor4dDescriptor(
+            tensorDesc,
+            cudnnTensorFormat_t_CUDNN_TENSOR_NCHW, 
+            data_type as cudnnDataType_t,
+            n as ::std::os::raw::c_int,
+            c as ::std::os::raw::c_int,
+            h as ::std::os::raw::c_int,
+            w as ::std::os::raw::c_int
+        );
         match  res{
             0 => Ok(()),
             x => Err(cudnnError::from(x))
