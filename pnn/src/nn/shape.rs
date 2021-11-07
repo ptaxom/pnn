@@ -34,6 +34,8 @@ pub trait Shape {
     fn dims(&self) -> &Vec<usize>;
 
     fn as_any(&self) -> &dyn Any;
+
+    fn size(&self) -> usize;
 }
 
 impl Debug for dyn Shape {
@@ -53,25 +55,26 @@ pub struct LayerShape {
     // W - width
 
     // packed into vec
-    dims: Vec<usize>
+    dims: Vec<usize>,
+    _size: usize
 }
 
 impl LayerShape {
     pub fn new(dims: Vec<usize>) -> Self{
         assert!(dims.len() > 1 && dims.len() < 5);
-        Self{dims}
+        Self{dims, _size:1}
     }
 
     pub fn from_nc(n: usize, c: usize) -> Self {
-        Self{dims: vec![n, c]}
+        Self{dims: vec![n, c], _size: n * c}
     }
 
     pub fn from_nch(n: usize, c: usize, h: usize) -> Self {
-        Self{dims: vec![n, c, h]}
+        Self{dims: vec![n, c, h], _size: n * c * h}
     }
 
     pub fn from_nchw(n: usize, c: usize, h: usize, w: usize) -> Self {
-        Self{dims: vec![n, c, h, w]}
+        Self{dims: vec![n, c, h, w], _size: n * c * h * w}
     }
 }
 
@@ -127,6 +130,10 @@ impl Shape for LayerShape {
 
     fn as_any(&self) -> &dyn Any{
         self
+    }
+
+    fn size(&self) -> usize {
+        self._size
     }
 }
 
