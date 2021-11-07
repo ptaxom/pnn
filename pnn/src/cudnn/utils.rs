@@ -7,7 +7,7 @@ use core::fmt::Debug;
 use std::{os::raw::{c_void, }};
 
 #[derive(Debug)]
-pub enum CudaError{
+pub enum cudaError{
     InvalidValue,
     MemoryAllocation,
     InitializationError,
@@ -133,7 +133,7 @@ pub enum CudaError{
 }
 
 
-impl fmt::Display for CudaError {
+impl fmt::Display for cudaError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let err_desc = match self {
             InvalidValue => "This indicates that one or more of the parameters passed to the API call is not within an acceptable range of values.",
@@ -262,139 +262,205 @@ impl fmt::Display for CudaError {
     }
 }
 
-impl From<u32> for CudaError {
+impl From<u32> for cudaError {
     fn from(error: u32) -> Self {
         match error {
-            1 => CudaError::InvalidValue,
-            2 => CudaError::MemoryAllocation,
-            3 => CudaError::InitializationError,
-            4 => CudaError::CudartUnloading,
-            5 => CudaError::ProfilerDisabled,
-            6 => CudaError::ProfilerNotInitialized,
-            7 => CudaError::ProfilerAlreadyStarted,
-            8 => CudaError::ProfilerAlreadyStopped,
-            9 => CudaError::InvalidConfiguration,
-            12 => CudaError::InvalidPitchValue,
-            13 => CudaError::InvalidSymbol,
-            16 => CudaError::InvalidHostPointer,
-            17 => CudaError::InvalidDevicePointer,
-            18 => CudaError::InvalidTexture,
-            19 => CudaError::InvalidTextureBinding,
-            20 => CudaError::InvalidChannelDescriptor,
-            21 => CudaError::InvalidMemcpyDirection,
-            22 => CudaError::AddressOfConstant,
-            23 => CudaError::TextureFetchFailed,
-            24 => CudaError::TextureNotBound,
-            25 => CudaError::SynchronizationError,
-            26 => CudaError::InvalidFilterSetting,
-            27 => CudaError::InvalidNormSetting,
-            28 => CudaError::MixedDeviceExecution,
-            31 => CudaError::NotYetImplemented,
-            32 => CudaError::MemoryValueTooLarge,
-            34 => CudaError::StubLibrary,
-            35 => CudaError::InsufficientDriver,
-            36 => CudaError::CallRequiresNewerDriver,
-            37 => CudaError::InvalidSurface,
-            43 => CudaError::DuplicateVariableName,
-            44 => CudaError::DuplicateTextureName,
-            45 => CudaError::DuplicateSurfaceName,
-            46 => CudaError::DevicesUnavailable,
-            49 => CudaError::IncompatibleDriverContext,
-            52 => CudaError::MissingConfiguration,
-            53 => CudaError::PriorLaunchFailure,
-            65 => CudaError::LaunchMaxDepthExceeded,
-            66 => CudaError::LaunchFileScopedTex,
-            67 => CudaError::LaunchFileScopedSurf,
-            68 => CudaError::SyncDepthExceeded,
-            69 => CudaError::LaunchPendingCountExceeded,
-            98 => CudaError::InvalidDeviceFunction,
-            100 => CudaError::NoDevice,
-            101 => CudaError::InvalidDevice,
-            102 => CudaError::DeviceNotLicensed,
-            103 => CudaError::SoftwareValidityNotEstablished,
-            127 => CudaError::StartupFailure,
-            200 => CudaError::InvalidKernelImage,
-            201 => CudaError::DeviceUninitialized,
-            205 => CudaError::MapBufferObjectFailed,
-            206 => CudaError::UnmapBufferObjectFailed,
-            207 => CudaError::ArrayIsMapped,
-            208 => CudaError::AlreadyMapped,
-            209 => CudaError::NoKernelImageForDevice,
-            210 => CudaError::AlreadyAcquired,
-            211 => CudaError::NotMapped,
-            212 => CudaError::NotMappedAsArray,
-            213 => CudaError::NotMappedAsPointer,
-            214 => CudaError::ECCUncorrectable,
-            215 => CudaError::UnsupportedLimit,
-            216 => CudaError::DeviceAlreadyInUse,
-            217 => CudaError::PeerAccessUnsupported,
-            218 => CudaError::InvalidPtx,
-            219 => CudaError::InvalidGraphicsContext,
-            220 => CudaError::NvlinkUncorrectable,
-            221 => CudaError::JitCompilerNotFound,
-            222 => CudaError::UnsupportedPtxVersion,
-            223 => CudaError::JitCompilationDisabled,
-            224 => CudaError::UnsupportedExecAffinity,
-            300 => CudaError::InvalidSource,
-            301 => CudaError::FileNotFound,
-            302 => CudaError::SharedObjectSymbolNotFound,
-            303 => CudaError::SharedObjectInitFailed,
-            304 => CudaError::OperatingSystem,
-            400 => CudaError::InvalidResourceHandle,
-            401 => CudaError::IllegalState,
-            500 => CudaError::SymbolNotFound,
-            600 => CudaError::NotReady,
-            700 => CudaError::IllegalAddress,
-            701 => CudaError::LaunchOutOfResources,
-            702 => CudaError::LaunchTimeout,
-            703 => CudaError::LaunchIncompatibleTexturing,
-            704 => CudaError::PeerAccessAlreadyEnabled,
-            705 => CudaError::PeerAccessNotEnabled,
-            708 => CudaError::SetOnActiveProcess,
-            709 => CudaError::ContextIsDestroyed,
-            710 => CudaError::Assert,
-            711 => CudaError::TooManyPeers,
-            712 => CudaError::HostMemoryAlreadyRegistered,
-            713 => CudaError::HostMemoryNotRegistered,
-            714 => CudaError::HardwareStackError,
-            715 => CudaError::IllegalInstruction,
-            716 => CudaError::MisalignedAddress,
-            717 => CudaError::InvalidAddressSpace,
-            718 => CudaError::InvalidPc,
-            719 => CudaError::LaunchFailure,
-            720 => CudaError::CooperativeLaunchTooLarge,
-            800 => CudaError::NotPermitted,
-            801 => CudaError::NotSupported,
-            802 => CudaError::SystemNotReady,
-            803 => CudaError::SystemDriverMismatch,
-            804 => CudaError::CompatNotSupportedOnDevice,
-            805 => CudaError::MpsConnectionFailed,
-            806 => CudaError::MpsRpcFailure,
-            807 => CudaError::MpsServerNotReady,
-            808 => CudaError::MpsMaxClientsReached,
-            809 => CudaError::MpsMaxConnectionsReached,
-            900 => CudaError::StreamCaptureUnsupported,
-            901 => CudaError::StreamCaptureInvalidated,
-            902 => CudaError::StreamCaptureMerge,
-            903 => CudaError::StreamCaptureUnmatched,
-            904 => CudaError::StreamCaptureUnjoined,
-            905 => CudaError::StreamCaptureIsolation,
-            906 => CudaError::StreamCaptureImplicit,
-            907 => CudaError::CapturedEvent,
-            908 => CudaError::StreamCaptureWrongThread,
-            909 => CudaError::Timeout,
-            910 => CudaError::GraphExecUpdateFailure,
-            911 => CudaError::ExternalDevice,
-            999 => CudaError::Unknown,
-            10000 => CudaError::ApiFailureBase,
-            _ => CudaError::Unknown,
+            1 => cudaError::InvalidValue,
+            2 => cudaError::MemoryAllocation,
+            3 => cudaError::InitializationError,
+            4 => cudaError::CudartUnloading,
+            5 => cudaError::ProfilerDisabled,
+            6 => cudaError::ProfilerNotInitialized,
+            7 => cudaError::ProfilerAlreadyStarted,
+            8 => cudaError::ProfilerAlreadyStopped,
+            9 => cudaError::InvalidConfiguration,
+            12 => cudaError::InvalidPitchValue,
+            13 => cudaError::InvalidSymbol,
+            16 => cudaError::InvalidHostPointer,
+            17 => cudaError::InvalidDevicePointer,
+            18 => cudaError::InvalidTexture,
+            19 => cudaError::InvalidTextureBinding,
+            20 => cudaError::InvalidChannelDescriptor,
+            21 => cudaError::InvalidMemcpyDirection,
+            22 => cudaError::AddressOfConstant,
+            23 => cudaError::TextureFetchFailed,
+            24 => cudaError::TextureNotBound,
+            25 => cudaError::SynchronizationError,
+            26 => cudaError::InvalidFilterSetting,
+            27 => cudaError::InvalidNormSetting,
+            28 => cudaError::MixedDeviceExecution,
+            31 => cudaError::NotYetImplemented,
+            32 => cudaError::MemoryValueTooLarge,
+            34 => cudaError::StubLibrary,
+            35 => cudaError::InsufficientDriver,
+            36 => cudaError::CallRequiresNewerDriver,
+            37 => cudaError::InvalidSurface,
+            43 => cudaError::DuplicateVariableName,
+            44 => cudaError::DuplicateTextureName,
+            45 => cudaError::DuplicateSurfaceName,
+            46 => cudaError::DevicesUnavailable,
+            49 => cudaError::IncompatibleDriverContext,
+            52 => cudaError::MissingConfiguration,
+            53 => cudaError::PriorLaunchFailure,
+            65 => cudaError::LaunchMaxDepthExceeded,
+            66 => cudaError::LaunchFileScopedTex,
+            67 => cudaError::LaunchFileScopedSurf,
+            68 => cudaError::SyncDepthExceeded,
+            69 => cudaError::LaunchPendingCountExceeded,
+            98 => cudaError::InvalidDeviceFunction,
+            100 => cudaError::NoDevice,
+            101 => cudaError::InvalidDevice,
+            102 => cudaError::DeviceNotLicensed,
+            103 => cudaError::SoftwareValidityNotEstablished,
+            127 => cudaError::StartupFailure,
+            200 => cudaError::InvalidKernelImage,
+            201 => cudaError::DeviceUninitialized,
+            205 => cudaError::MapBufferObjectFailed,
+            206 => cudaError::UnmapBufferObjectFailed,
+            207 => cudaError::ArrayIsMapped,
+            208 => cudaError::AlreadyMapped,
+            209 => cudaError::NoKernelImageForDevice,
+            210 => cudaError::AlreadyAcquired,
+            211 => cudaError::NotMapped,
+            212 => cudaError::NotMappedAsArray,
+            213 => cudaError::NotMappedAsPointer,
+            214 => cudaError::ECCUncorrectable,
+            215 => cudaError::UnsupportedLimit,
+            216 => cudaError::DeviceAlreadyInUse,
+            217 => cudaError::PeerAccessUnsupported,
+            218 => cudaError::InvalidPtx,
+            219 => cudaError::InvalidGraphicsContext,
+            220 => cudaError::NvlinkUncorrectable,
+            221 => cudaError::JitCompilerNotFound,
+            222 => cudaError::UnsupportedPtxVersion,
+            223 => cudaError::JitCompilationDisabled,
+            224 => cudaError::UnsupportedExecAffinity,
+            300 => cudaError::InvalidSource,
+            301 => cudaError::FileNotFound,
+            302 => cudaError::SharedObjectSymbolNotFound,
+            303 => cudaError::SharedObjectInitFailed,
+            304 => cudaError::OperatingSystem,
+            400 => cudaError::InvalidResourceHandle,
+            401 => cudaError::IllegalState,
+            500 => cudaError::SymbolNotFound,
+            600 => cudaError::NotReady,
+            700 => cudaError::IllegalAddress,
+            701 => cudaError::LaunchOutOfResources,
+            702 => cudaError::LaunchTimeout,
+            703 => cudaError::LaunchIncompatibleTexturing,
+            704 => cudaError::PeerAccessAlreadyEnabled,
+            705 => cudaError::PeerAccessNotEnabled,
+            708 => cudaError::SetOnActiveProcess,
+            709 => cudaError::ContextIsDestroyed,
+            710 => cudaError::Assert,
+            711 => cudaError::TooManyPeers,
+            712 => cudaError::HostMemoryAlreadyRegistered,
+            713 => cudaError::HostMemoryNotRegistered,
+            714 => cudaError::HardwareStackError,
+            715 => cudaError::IllegalInstruction,
+            716 => cudaError::MisalignedAddress,
+            717 => cudaError::InvalidAddressSpace,
+            718 => cudaError::InvalidPc,
+            719 => cudaError::LaunchFailure,
+            720 => cudaError::CooperativeLaunchTooLarge,
+            800 => cudaError::NotPermitted,
+            801 => cudaError::NotSupported,
+            802 => cudaError::SystemNotReady,
+            803 => cudaError::SystemDriverMismatch,
+            804 => cudaError::CompatNotSupportedOnDevice,
+            805 => cudaError::MpsConnectionFailed,
+            806 => cudaError::MpsRpcFailure,
+            807 => cudaError::MpsServerNotReady,
+            808 => cudaError::MpsMaxClientsReached,
+            809 => cudaError::MpsMaxConnectionsReached,
+            900 => cudaError::StreamCaptureUnsupported,
+            901 => cudaError::StreamCaptureInvalidated,
+            902 => cudaError::StreamCaptureMerge,
+            903 => cudaError::StreamCaptureUnmatched,
+            904 => cudaError::StreamCaptureUnjoined,
+            905 => cudaError::StreamCaptureIsolation,
+            906 => cudaError::StreamCaptureImplicit,
+            907 => cudaError::CapturedEvent,
+            908 => cudaError::StreamCaptureWrongThread,
+            909 => cudaError::Timeout,
+            910 => cudaError::GraphExecUpdateFailure,
+            911 => cudaError::ExternalDevice,
+            999 => cudaError::Unknown,
+            10000 => cudaError::ApiFailureBase,
+            _ => cudaError::Unknown,
         }
     }
 }
 
-impl Error for CudaError {}
+impl Error for cudaError {}
 
-pub fn cudaMalloc(size: usize) -> Result<*mut c_void, CudaError> {
+#[derive(Debug)]
+pub enum cudnnError {
+    NOT_INITIALIZED,
+    ALLOC_FAILED,
+    BAD_PARAM,
+    INTERNAL_ERROR,
+    INVALID_VALUE,
+    ARCH_MISMATCH,
+    MAPPING_ERROR,
+    EXECUTION_FAILED,
+    NOT_SUPPORTED,
+    LICENSE_ERROR,
+    RUNTIME_PREREQUISITE_MISSING,
+    RUNTIME_IN_PROGRESS,
+    RUNTIME_FP_OVERFLOW,
+    VERSION_MISMATCH,
+    UNKNOWN
+}
+
+impl fmt::Display for cudnnError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let err_desc = match self {
+            NOT_INITIALIZED => "The cuDNN library was not initialized properly. This error is usually returned when a call to cudnnCreate() fails or when cudnnCreate() has not been called prior to calling another cuDNN routine. In the former case, it is usually due to an error in the CUDA Runtime API called by cudnnCreate() or by an error in the hardware setup.",
+            ALLOC_FAILED => "Resource allocation failed inside the cuDNN library. This is usually caused by an internal cudaMalloc() failure.\nTo correct, prior to the function call, deallocate previously allocated memory as much as possible.",
+            BAD_PARAM => "An incorrect value or parameter was passed to the function.\nTo correct, ensure that all the parameters being passed have valid values.",
+            INTERNAL_ERROR => "An internal cuDNN operation failed.",
+            INVALID_VALUE => "Function specific errror. Refer docs at https://docs.nvidia.com/deeplearning/cudnn/api/index.html",
+            ARCH_MISMATCH => "The function requires a feature absent from the current GPU device. Note that cuDNN only supports devices with compute capabilities greater than or equal to 3.0.\nTo correct, compile and run the application on a device with appropriate compute capability.",
+            MAPPING_ERROR => "An access to GPU memory space failed, which is usually caused by a failure to bind a texture.\nTo correct, prior to the function call, unbind any previously bound textures.\nOtherwise, this may indicate an internal error/bug in the library.",
+            EXECUTION_FAILED => "Function specific errror. Refer docs at https://docs.nvidia.com/deeplearning/cudnn/api/index.html",
+            NOT_SUPPORTED => "Function specific errror. Refer docs at https://docs.nvidia.com/deeplearning/cudnn/api/index.html",
+            LICENSE_ERROR => "The functionality requested requires some license and an error was detected when trying to check the current licensing. This error can happen if the license is not present or is expired or if the environment variable NVIDIA_LICENSE_FILE is not set properly.",
+            RUNTIME_PREREQUISITE_MISSING => "A prerequisite runtime library cannot be found.",
+            RUNTIME_IN_PROGRESS => "Some tasks in the user stream are not completed.",
+            RUNTIME_FP_OVERFLOW => "Numerical overflow occurred during the GPU kernel execution.",
+            VERSION_MISMATCH => "The version of this DLL file does not match that of a cuDNN DLLs on which it depends.",
+            UNKNOWN => "This error is defined by rust bindings. If it occurs, means that returned unexpected int value."
+        };
+        write!(f, "{}", err_desc)
+    }
+}
+
+impl From<u32> for cudnnError {
+    fn from(error: u32) -> Self {
+        match error {
+            1  => cudnnError::NOT_INITIALIZED,
+            2  => cudnnError::ALLOC_FAILED,
+            3  => cudnnError::BAD_PARAM,
+            4  => cudnnError::INTERNAL_ERROR,
+            5  => cudnnError::INVALID_VALUE,
+            6  => cudnnError::ARCH_MISMATCH,
+            7  => cudnnError::MAPPING_ERROR,
+            8  => cudnnError::EXECUTION_FAILED,
+            9  => cudnnError::NOT_SUPPORTED,
+            10 => cudnnError::LICENSE_ERROR,
+            11 => cudnnError::RUNTIME_PREREQUISITE_MISSING,
+            12 => cudnnError::RUNTIME_IN_PROGRESS,
+            13 => cudnnError::RUNTIME_FP_OVERFLOW,
+            14 => cudnnError::VERSION_MISMATCH,
+            _  => cudnnError::UNKNOWN
+        }
+    }
+}
+
+impl Error for cudnnError {}
+
+pub fn cudaMalloc(size: usize) -> Result<*mut c_void, cudaError> {
     use pnn_sys::cudaMalloc;
 
     unsafe {
@@ -402,12 +468,12 @@ pub fn cudaMalloc(size: usize) -> Result<*mut c_void, CudaError> {
         let res = cudaMalloc(&mut ptr as *mut *mut c_void, size);
         match  res{
             0 => Ok(ptr),
-            x => Err(CudaError::from(x))
+            x => Err(cudaError::from(x))
         }
     }
 }
 
-pub fn cudaFree(ptr: *mut c_void) -> Result<(), CudaError> {
+pub fn cudaFree(ptr: *mut c_void) -> Result<(), cudaError> {
     use pnn_sys::cudaFree;
     extern crate libc;
 
@@ -415,7 +481,36 @@ pub fn cudaFree(ptr: *mut c_void) -> Result<(), CudaError> {
         let res = cudaFree(ptr);
         match  res{
             0 => Ok(()),
-            x => Err(CudaError::from(x))
+            x => Err(cudaError::from(x))
+        }
+    }
+}
+
+pub use pnn_sys::{cudnnHandle_t};
+
+pub fn cudnnCreate() -> Result<cudnnHandle_t, cudnnError> {
+    use pnn_sys::cudnnCreate;
+    extern crate libc;
+
+    unsafe {
+        let mut ptr: cudnnHandle_t = std::ptr::null_mut() as cudnnHandle_t;
+        let res = cudnnCreate(&mut ptr as *mut cudnnHandle_t);
+        match  res{
+            0 => Ok(ptr),
+            x => Err(cudnnError::from(x))
+        }
+    }
+}
+
+pub fn cudnnDestroy(handle: cudnnHandle_t) -> Result<(), cudnnError> {
+    use pnn_sys::cudnnDestroy;
+    extern crate libc;
+
+    unsafe {
+        let res = cudnnDestroy(handle);
+        match  res{
+            0 => Ok(()),
+            x => Err(cudnnError::from(x))
         }
     }
 }

@@ -9,3 +9,5 @@ edition = "2018"
 regex = "1"
 md5 = "0.7.0"
 itertools = "0.8.2"
+pnn-sys = { path = "../pnn-sys" }
+libc = "0.2"
