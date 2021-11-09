@@ -92,7 +92,7 @@ mod tests {
     fn success_parsed_base() {
         use md5;
         use itertools::Itertools; 
-        let filename = String::from("./cfgs/tests/base.cfg");
+        let filename = String::from("../cfgs/tests/base.cfg");
         let result = parse_file(&filename);
         match result {
             Ok(config) => {

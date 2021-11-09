@@ -45,7 +45,9 @@ impl Layer for InputLayer {
         self
     }
 
-    fn infer_shape(&mut self, input_shapes: Vec<&dyn Shape>) {}
+    fn infer_shape(&mut self, input_shapes: Vec<Rc<dyn Shape>>) -> Result<(), ShapeError>  {
+        Ok(())
+    }
 
     fn from_config(config: HashMap<String, String>) -> Result<Box<dyn Layer>, DeserializationError> {
         let proposed_name = InputLayer::propose_name();

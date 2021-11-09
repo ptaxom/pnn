@@ -21,9 +21,12 @@ pub trait Layer {
 
     fn as_any_mut(&mut self) -> &mut dyn Any;
 
-    fn infer_shape(&mut self, input_shapes: Vec<&dyn Shape>);
+    fn infer_shape(&mut self, input_shapes: Vec<Rc<dyn Shape>>) -> Result<(), ShapeError> ;
 }
 
 
 mod input;
+mod convolutional;
+
 pub use input::*;
+pub use convolutional::*;
