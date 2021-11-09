@@ -77,7 +77,7 @@ where T: std::str::FromStr
         .map(|x| {
             x.parse::<T>()
             .map_err(|_e| {
-                DeserializationError{description: format!("Couldnt parse value '{}' in field 'from' of {}", x, layer_name)}
+                DeserializationError{description: format!("Couldnt parse value '{}' in field '{}' of {}", x, key, layer_name)}
             })
         })
         .collect()
