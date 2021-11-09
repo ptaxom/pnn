@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     self,
     any::Any,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{Ordering},
     rc::Rc
 };
 
@@ -111,7 +111,7 @@ impl Layer for ConvolutionalLayer {
         let padding = parse_numerical_field::<usize>(&config, "padding", false, Some(default_padding))?.unwrap();
         let activation: String = config.get("activation").unwrap_or(&String::from("linear")).to_string();
         
-        config.keys().filter(|k| {
+        let _ = config.keys().filter(|k| {
             !SUPPORTED_FIELDS.contains(&&k[..])
         }).map(|k| {
             log::warn!("Not supported darknet field during deserialization of '{}'. Field '{}' not recognized", name, k)
@@ -168,12 +168,11 @@ mod tests {
 
     #[test]
     fn test_infer_shape_simple() {
-        let mut config = generate_config();
         let shapes: Vec<Rc<dyn Shape>> = vec![Rc::new(LayerShape::from_nchw(32, 3, 128, 128))];
 
 
-        let mut layer = ConvolutionalLayer::from_config(config).unwrap();
-        layer.infer_shape(shapes);
+        let mut layer = ConvolutionalLayer::from_config(generate_config()).unwrap();
+        layer.infer_shape(shapes).unwrap();
         let conv_layer = layer.as_any().downcast_ref::<ConvolutionalLayer>().unwrap();
 
         assert_eq!(*conv_layer.shape().unwrap().dims(), vec![32, 32, 128, 128]);
@@ -187,7 +186,7 @@ mod tests {
 
 
         let mut layer = ConvolutionalLayer::from_config(config).unwrap();
-        layer.infer_shape(shapes);
+        layer.infer_shape(shapes).unwrap();
         let conv_layer = layer.as_any().downcast_ref::<ConvolutionalLayer>().unwrap();
 
         assert_eq!(*conv_layer.shape().unwrap().dims(), vec![32, 32, 124, 96]);
@@ -239,7 +238,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "Convolutional layer can be connected only with layer, which produce 4D Tensor with format NCHW")]
-    fn test_infer_shape_3D() {
+    fn test_infer_shape_3d() {
         let shapes: Vec<Rc<dyn Shape>> = vec![
             Rc::new(LayerShape::from_nch(32, 3, 128))
             ];

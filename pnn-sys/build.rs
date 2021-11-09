@@ -1,8 +1,5 @@
 use bindgen::Builder;
 
-use std::env;
-use std::path::PathBuf;
-
 fn main() {
     println!("cargo:rustc-link-lib=cuda");
     println!("cargo:rustc-link-lib=cudnn");

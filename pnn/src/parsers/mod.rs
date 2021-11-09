@@ -1,7 +1,7 @@
 use std::{
     fs::File,
     collections::HashMap,
-    io::{Read, self},
+    io::{Read},
     error::Error,
     self};
 use regex::Regex;
@@ -71,6 +71,7 @@ where T: std::str::FromStr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io;
 
     #[test]
     fn file_not_exists() {

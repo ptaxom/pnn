@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     self,
     any::Any,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{Ordering},
     rc::Rc
 };
 
@@ -45,7 +45,7 @@ impl Layer for InputLayer {
         self
     }
 
-    fn infer_shape(&mut self, input_shapes: Vec<Rc<dyn Shape>>) -> Result<(), ShapeError>  {
+    fn infer_shape(&mut self, _input_shapes: Vec<Rc<dyn Shape>>) -> Result<(), ShapeError>  {
         Ok(())
     }
 
@@ -102,8 +102,8 @@ mod tests {
 
     #[test]
     fn test_deserialize_names() {        
-        let layer = InputLayer::from_config(generate_config()).unwrap();
-        let layer2 = InputLayer::from_config(generate_config()).unwrap();
+        let _layer = InputLayer::from_config(generate_config()).unwrap();
+        let _layer2 = InputLayer::from_config(generate_config()).unwrap();
 
         let mut named_config = generate_config();
         named_config.insert(String::from("name"), String::from("CustomName"));

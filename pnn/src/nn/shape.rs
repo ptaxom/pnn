@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 
 use std::{
     error::Error,
@@ -169,13 +170,13 @@ mod tests {
     #[test]
     #[should_panic]
     fn shape_ncreated() {
-        let shape = LayerShape::new(vec![1]);
+        let _shape = LayerShape::new(vec![1]);
     }
 
     #[test]
     #[should_panic]
     fn shape_ncreated2() {
-        let shape = LayerShape::new(vec![1, 2, 3, 4, 5]);
+        let _shape = LayerShape::new(vec![1, 2, 3, 4, 5]);
     }
 
     #[test]

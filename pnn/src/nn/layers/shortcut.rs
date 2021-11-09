@@ -2,13 +2,13 @@ use std::{
     collections::HashMap,
     self,
     any::Any,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{Ordering},
     rc::Rc
 };
 
 use crate::nn::shape::*;
 use crate::nn::Layer;
-use crate::parsers::{DeserializationError, parse_numerical_field};
+use crate::parsers::{DeserializationError};
 
 
 //Input layer for most NNs
@@ -75,7 +75,7 @@ impl Layer for ShortcutLayer {
             .split(',')
             .map(|x| {
                 x.parse::<i32>()
-                 .map_err(|e| {
+                 .map_err(|_e| {
                      DeserializationError{description: format!("Couldnt parse value '{}' in field 'from' of Shortcut layer", x)}
                  })
             })
@@ -84,7 +84,7 @@ impl Layer for ShortcutLayer {
 
         let activation: String = config.get("activation").unwrap_or(&String::from("linear")).to_string();
         
-        config.keys().filter(|k| {
+        let _ = config.keys().filter(|k| {
             !SUPPORTED_FIELDS.contains(&&k[..])
         }).map(|k| {
             log::warn!("Not supported darknet field during deserialization of '{}'. Field '{}' not recognized", name, k)

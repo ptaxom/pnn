@@ -2,7 +2,6 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(deref_nullptr)]
-
-use libc::*;
+#![allow(improper_ctypes)]
 
 include!("./bindings.rs");

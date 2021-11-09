@@ -1,5 +1,5 @@
 use crate::nn::{Shape, ShapeError};
-use std::{os::raw::c_void, fmt, cell::RefCell, error::Error};
+use std::{os::raw::c_void, fmt, error::Error};
 use pnn_sys::{cudnnTensorDescriptor_t};
 use crate::cudnn::*;
 
