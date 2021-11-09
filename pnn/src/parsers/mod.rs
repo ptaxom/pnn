@@ -83,6 +83,13 @@ where T: std::str::FromStr
         .collect()
 }
 
+pub fn ensure_positive(value: usize, key: &str, layer: &str) -> Result<(), DeserializationError> {
+    match value < 1 {
+        true => return Err(DeserializationError{description: format!("Field '{}' of {} should be positive", key, layer)}),
+        _ => Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -231,7 +231,6 @@ mod tests {
             Rc::new(LayerShape::from_nchw(32, 3, 128, 100))
             ];
 
-
         let mut layer = ConvolutionalLayer::from_config(generate_config()).unwrap();
         layer.infer_shape(shapes).unwrap();
     }
@@ -242,7 +241,6 @@ mod tests {
         let shapes: Vec<Rc<dyn Shape>> = vec![
             Rc::new(LayerShape::from_nch(32, 3, 128))
             ];
-
 
         let mut layer = ConvolutionalLayer::from_config(generate_config()).unwrap();
         layer.infer_shape(shapes).unwrap();

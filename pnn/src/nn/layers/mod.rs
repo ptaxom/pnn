@@ -29,8 +29,10 @@ mod input;
 mod convolutional;
 mod shortcut;
 mod route;
+mod maxpool;
 
 pub use input::*;
 pub use convolutional::*;
 pub use shortcut::*;
 pub use route::*;
+pub use maxpool::*;
