@@ -11,7 +11,7 @@ use crate::nn::Layer;
 use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positive};
 
 
-//Input layer for most NNs
+//Maxpool
 #[derive(Debug)]
 pub struct MaxpoolLayer {
     // Layer name
@@ -43,7 +43,7 @@ impl Layer for MaxpoolLayer {
 
     fn propose_name() -> String {
         static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        format!("Route_{}", COUNTER.fetch_add(1, Ordering::Relaxed))
+        format!("Maxpool_{}", COUNTER.fetch_add(1, Ordering::Relaxed))
     }
  
     fn infer_shape(&mut self, input_shapes: Vec<Rc<dyn Shape>>) -> Result<(), ShapeError> {

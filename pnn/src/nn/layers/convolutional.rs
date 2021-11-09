@@ -11,7 +11,7 @@ use crate::nn::Layer;
 use crate::parsers::{DeserializationError, parse_numerical_field};
 
 
-//Input layer for most NNs
+//Convolution
 #[derive(Debug)]
 pub struct ConvolutionalLayer {
     // Layer name

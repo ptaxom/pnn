@@ -75,7 +75,7 @@ where T: std::str::FromStr
         .ok_or(DeserializationError{description: format!("Field '{}' is mandatory for {}", key, layer_name)})?
         .split(',')
         .map(|x| {
-            x.parse::<T>()
+            x.trim().parse::<T>()
             .map_err(|_e| {
                 DeserializationError{description: format!("Couldnt parse value '{}' in field '{}' of {}", x, key, layer_name)}
             })

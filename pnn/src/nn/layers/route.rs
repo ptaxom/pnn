@@ -11,7 +11,7 @@ use crate::nn::Layer;
 use crate::parsers::{DeserializationError, parse_list_field};
 
 
-//Input layer for most NNs
+//Concat layers across filters or refer previous layer
 #[derive(Debug)]
 pub struct RouteLayer {
     // Layer name
@@ -103,7 +103,7 @@ mod tests {
     #[test]
     fn test_create_bulk() {
         let mut config: HashMap<String, String> = HashMap::new();
-        config.insert(String::from("layers"), String::from("-4,-5,-6"));
+        config.insert(String::from("layers"), String::from("-4 ,-5, -6"));
         let layer = RouteLayer::from_config(config).unwrap();
         let layer = layer.as_any().downcast_ref::<RouteLayer>().unwrap();
         assert_eq!(layer.layers, [-4, -5, -6]);
