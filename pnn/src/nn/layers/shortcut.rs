@@ -8,7 +8,7 @@ use std::{
 
 use crate::nn::shape::*;
 use crate::nn::Layer;
-use crate::parsers::{DeserializationError};
+use crate::parsers::{DeserializationError, parse_list_field};
 
 
 //Input layer for most NNs
@@ -44,13 +44,13 @@ impl Layer for ShortcutLayer {
     }
 
     fn infer_shape(&mut self, input_shapes: Vec<Rc<dyn Shape>>) -> Result<(), ShapeError> {
-        if input_shapes.len() == 1 {
-            return Err(ShapeError{description: String::from("Shortcut layer must connect at least 2 layers")})
+        if input_shapes.len() < 2 {
+            return Err(ShapeError{description: String::from("ShortcutLayer must connect at least 2 layers")})
         }
         let input_dim = input_shapes[0].dims();
         for shape in &input_shapes {
             if shape.dims().iter().cmp(input_dim.iter()) != std::cmp::Ordering::Equal {
-                return Err(ShapeError{description: String::from("All input tensors at shortcut layer must have same shape")});
+                return Err(ShapeError{description: String::from("All input tensors at ShortcutLayer must have same shape")});
             }
         }
         self.shape = Some(Rc::new(LayerShape::new(input_dim.clone())));
@@ -69,18 +69,7 @@ impl Layer for ShortcutLayer {
         let proposed_name = ShortcutLayer::propose_name();
         let name: String = config.get("name").unwrap_or(&proposed_name).to_string();
         let shape = None;
-        let from: Result<Vec<i32>, DeserializationError> = config
-            .get("from")
-            .ok_or(DeserializationError{description: String::from("Field 'from' is mandatory for Shortcut layer")})?
-            .split(',')
-            .map(|x| {
-                x.parse::<i32>()
-                 .map_err(|_e| {
-                     DeserializationError{description: format!("Couldnt parse value '{}' in field 'from' of Shortcut layer", x)}
-                 })
-            })
-            .collect();
-        let from = from?;
+        let from = parse_list_field::<i32>(&config, "from", "ShortcutLayer")?;
 
         let activation: String = config.get("activation").unwrap_or(&String::from("linear")).to_string();
         
@@ -128,7 +117,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Couldnt parse value '-4.5' in field 'from' of Shortcut layer")]
+    #[should_panic(expected = "Couldnt parse value '-4.5' in field 'from' of ShortcutLayer")]
     fn test_create_fail_parse_float() {
         let mut config: HashMap<String, String> = HashMap::new();
         config.insert(String::from("from"), String::from("-4.5"));
@@ -136,7 +125,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Couldnt parse value 'asd' in field 'from' of Shortcut layer")]
+    #[should_panic(expected = "Couldnt parse value 'asd' in field 'from' of ShortcutLayer")]
     fn test_create_fail_str() {
         let mut config: HashMap<String, String> = HashMap::new();
         config.insert(String::from("from"), String::from("-4,asd,-6"));
@@ -144,7 +133,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Shortcut layer must connect at least 2 layers")]
+    #[should_panic(expected = "ShortcutLayer must connect at least 2 layers")]
     fn test_infer_shape_invalid_count() {
         let shapes: Vec<Rc<dyn Shape>> = vec![
             Rc::new(LayerShape::from_nchw(32, 3, 128, 100))
@@ -156,7 +145,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "All input tensors at shortcut layer must have same shape")]
+    #[should_panic(expected = "All input tensors at ShortcutLayer must have same shape")]
     fn test_infer_shape_invalid_shapes() {
         let shapes: Vec<Rc<dyn Shape>> = vec![
             Rc::new(LayerShape::from_nchw(32, 3, 128, 100)),

@@ -68,6 +68,21 @@ where T: std::str::FromStr
     }
 }
 
+pub fn parse_list_field<T>(config: &HashMap<String, String>, key: &str, layer_name: &str) -> Result<Vec<T>, DeserializationError>
+where T: std::str::FromStr
+{
+    config.get(key)
+        .ok_or(DeserializationError{description: format!("Field '{}' is mandatory for {}", key, layer_name)})?
+        .split(',')
+        .map(|x| {
+            x.parse::<T>()
+            .map_err(|_e| {
+                DeserializationError{description: format!("Couldnt parse value '{}' in field 'from' of {}", x, layer_name)}
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
