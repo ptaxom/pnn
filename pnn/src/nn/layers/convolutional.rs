@@ -67,20 +67,20 @@ impl Layer for ConvolutionalLayer {
             return Err(ShapeError{description: String::from("Convolutional layer can be connected only with layer, which produce 4D Tensor with format NCHW")})
         }
         let n = input_shape.N();
-        let delta = if self.pad {self.padding as i64} else {0};
+        let delta = if self.pad {self.padding as i32} else {0};
 
-        let h: i64 = (input_shape.H().unwrap() as i64
-                      - self.size as i64
+        let h: i32 = (input_shape.H().unwrap() as i32
+                      - self.size as i32
                       + 2 * delta
-                      + self.stride as i64) / self.stride as i64;
+                      + self.stride as i32) / self.stride as i32;
         if h <= 0 {
             return Err(ShapeError{description: format!("Couldnt set height to {}", h)});
         }
 
-        let w: i64 = (input_shape.W().unwrap() as i64
-                      - self.size as i64
+        let w: i32 = (input_shape.W().unwrap() as i32
+                      - self.size as i32
                       + 2 * delta
-                      + self.stride as i64) / self.stride as i64;
+                      + self.stride as i32) / self.stride as i32;
         if w <= 0 {
             return Err(ShapeError{description: format!("Couldnt set width to {}", w)});
         }
@@ -167,7 +167,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_infer_shape_simple() {
+    fn test_infer_shape_simple() {
         let mut config = generate_config();
         let shapes: Vec<Rc<dyn Shape>> = vec![Rc::new(LayerShape::from_nchw(32, 3, 128, 128))];
 
@@ -180,7 +180,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_infer_shape_sized() {
+    fn test_infer_shape_sized() {
         let mut config = generate_config();
         config.insert(String::from("size"), String::from("5"));
         let shapes: Vec<Rc<dyn Shape>> = vec![Rc::new(LayerShape::from_nchw(32, 3, 128, 100))];
@@ -194,7 +194,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_infer_shape_sized_padded() {
+    fn test_infer_shape_sized_padded() {
         let mut config = generate_config();
         config.insert(String::from("size"), String::from("5"));
         config.insert(String::from("pad"), String::from("1"));
@@ -209,7 +209,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_infer_shape_sized_padded_strided() {
+    fn test_infer_shape_sized_padded_strided() {
         let mut config = generate_config();
         config.insert(String::from("size"), String::from("5"));
         config.insert(String::from("pad"), String::from("1"));
@@ -226,7 +226,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "Convolutional layer must have exact one input layer")]
-    fn test_create_infer_shape_invalid_count() {
+    fn test_infer_shape_invalid_count() {
         let shapes: Vec<Rc<dyn Shape>> = vec![
             Rc::new(LayerShape::from_nchw(32, 3, 128, 100)),
             Rc::new(LayerShape::from_nchw(32, 3, 128, 100))
@@ -239,7 +239,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "Convolutional layer can be connected only with layer, which produce 4D Tensor with format NCHW")]
-    fn test_create_infer_shape_3D() {
+    fn test_infer_shape_3D() {
         let shapes: Vec<Rc<dyn Shape>> = vec![
             Rc::new(LayerShape::from_nch(32, 3, 128))
             ];

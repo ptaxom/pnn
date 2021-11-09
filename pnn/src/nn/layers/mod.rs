@@ -27,6 +27,8 @@ pub trait Layer {
 
 mod input;
 mod convolutional;
+mod shortcut;
 
 pub use input::*;
 pub use convolutional::*;
+pub use shortcut::*;
