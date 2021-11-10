@@ -31,6 +31,7 @@ mod shortcut;
 mod route;
 mod maxpool;
 mod upsample;
+mod yolo;
 
 pub use input::*;
 pub use convolutional::*;
@@ -38,3 +39,4 @@ pub use shortcut::*;
 pub use route::*;
 pub use maxpool::*;
 pub use upsample::*;
+pub use yolo::*;
