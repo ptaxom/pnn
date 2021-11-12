@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::nn::shape::*;
-use crate::nn::Layer;
+use crate::nn::{Layer, LayerType};
 use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positive};
 
 
@@ -83,6 +83,10 @@ impl Layer for UpsampleLayer {
         });
 
         Ok(Box::new(UpsampleLayer{name, shape, stride, scale}))
+    }
+
+    fn layer_type(&self) -> LayerType {
+        LayerType::Upsample
     }
 
 }
@@ -164,6 +168,12 @@ mod tests {
 
         let mut layer = UpsampleLayer::from_config(generate_config()).unwrap();
         layer.infer_shape(shapes).unwrap();
+    }
+
+    #[test]
+    fn test_layer_type() {
+        let layer = UpsampleLayer::from_config(generate_config()).unwrap();
+        assert_eq!(layer.layer_type(), LayerType::Upsample);
     }
 
 }

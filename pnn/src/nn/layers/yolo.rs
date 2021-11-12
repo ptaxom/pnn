@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::nn::shape::*;
-use crate::nn::Layer;
+use crate::nn::{Layer, LayerType};
 use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positive};
 
 
@@ -88,6 +88,10 @@ impl Layer for YoloLayer {
         Ok(Box::new(YoloLayer{name, shape, classes, anchors}))
     }
 
+    fn layer_type(&self) -> LayerType {
+        LayerType::YoloLayer
+    }
+
 }
 
 impl YoloLayer {
@@ -160,6 +164,12 @@ mod tests {
 
         let mut layer = YoloLayer::from_config(generate_config()).unwrap();
         layer.infer_shape(shapes).unwrap();
+    }
+    
+    #[test]
+    fn test_layer_type() {
+        let layer = YoloLayer::from_config(generate_config()).unwrap();
+        assert_eq!(layer.layer_type(), LayerType::YoloLayer);
     }
 
 }

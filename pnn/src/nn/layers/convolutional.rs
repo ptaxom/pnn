@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::nn::shape::*;
-use crate::nn::Layer;
+use crate::nn::{Layer, LayerType};
 use crate::parsers::{DeserializationError, parse_numerical_field};
 
 
@@ -118,6 +118,10 @@ impl Layer for ConvolutionalLayer {
         });
 
         Ok(Box::new(ConvolutionalLayer{name, shape, filters, batch_normalize, size, stride, pad, padding, activation}))
+    }
+
+    fn layer_type(&self) -> LayerType {
+        LayerType::Convolutional
     }
 
 }
@@ -244,6 +248,12 @@ mod tests {
 
         let mut layer = ConvolutionalLayer::from_config(generate_config()).unwrap();
         layer.infer_shape(shapes).unwrap();
+    }
+
+    #[test]
+    fn test_layer_type() {
+        let layer = ConvolutionalLayer::from_config(generate_config()).unwrap();
+        assert_eq!(layer.layer_type(), LayerType::Convolutional);
     }
 
 }

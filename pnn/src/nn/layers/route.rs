@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::nn::shape::*;
-use crate::nn::Layer;
+use crate::nn::{Layer, LayerType};
 use crate::parsers::{DeserializationError, parse_list_field};
 
 
@@ -75,6 +75,10 @@ impl Layer for RouteLayer {
         });
 
         Ok(Box::new(RouteLayer{name, shape, layers}))
+    }
+
+    fn layer_type(&self) -> LayerType {
+        LayerType::Route
     }
 
 }
@@ -171,5 +175,12 @@ mod tests {
         layer.infer_shape(shapes).unwrap();
         assert_eq!(*layer.shape().unwrap().dims(), vec![32, 100, 128, 100]);
     }
+
+    #[test]
+    fn test_layer_type() {
+        let layer = RouteLayer::from_config(generate_config()).unwrap();
+        assert_eq!(layer.layer_type(), LayerType::Route);
+    }
+
 
 }

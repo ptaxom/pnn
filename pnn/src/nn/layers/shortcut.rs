@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::nn::shape::*;
-use crate::nn::Layer;
+use crate::nn::{Layer, LayerType};
 use crate::parsers::{DeserializationError, parse_list_field};
 
 
@@ -80,6 +80,10 @@ impl Layer for ShortcutLayer {
         });
 
         Ok(Box::new(ShortcutLayer{name, shape, from, activation}))
+    }
+
+    fn layer_type(&self) -> LayerType {
+        LayerType::Shortcut
     }
 
 }
@@ -168,6 +172,12 @@ mod tests {
         let mut layer = ShortcutLayer::from_config(generate_config()).unwrap();
         layer.infer_shape(shapes).unwrap();
         assert_eq!(*layer.shape().unwrap().dims(), vec![32, 3, 128, 100]);
+    }
+
+    #[test]
+    fn test_layer_type() {
+        let layer = ShortcutLayer::from_config(generate_config()).unwrap();
+        assert_eq!(layer.layer_type(), LayerType::Shortcut);
     }
 
 }

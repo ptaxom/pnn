@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::nn::shape::*;
-use crate::nn::Layer;
+use crate::nn::{Layer, LayerType};
 use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positive};
 
 
@@ -96,6 +96,11 @@ impl Layer for MaxpoolLayer {
         Ok(Box::new(MaxpoolLayer{name, shape, stride, size, padding}))
     }
 
+
+    fn layer_type(&self) -> LayerType {
+        LayerType::Maxpool
+    }
+
 }
 
 
@@ -119,6 +124,13 @@ mod tests {
 
         assert_eq!(layer.stride, 3);
         assert_eq!(layer.size, 3);
+    }
+
+
+    #[test]
+    fn test_layer_type() {
+        let layer = MaxpoolLayer::from_config(generate_config()).unwrap();
+        assert_eq!(layer.layer_type(), LayerType::Maxpool);
     }
 
     #[test]

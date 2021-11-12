@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::nn::shape::*;
-use crate::nn::Layer;
+use crate::nn::{Layer, LayerType};
 use crate::parsers::{DeserializationError, parse_numerical_field};
 
 
@@ -65,6 +65,10 @@ impl Layer for InputLayer {
             }
         }
         Ok(Box::new(InputLayer{name, shape, dims}))
+    }
+
+    fn layer_type(&self) -> LayerType {
+        LayerType::Input
     }
 
 }
@@ -133,6 +137,16 @@ mod tests {
 
         let inp_layer = layer.as_any().downcast_ref::<InputLayer>().unwrap();
         assert_eq!(inp_layer.dims, vec![3, 5, 6]);
+    }
+
+    #[test]
+    fn test_layer_type() {
+        let mut config = generate_config();
+        config.insert(String::from("height"), String::from("5"));
+        config.insert(String::from("width"), String::from("6"));
+        let layer = InputLayer::from_config(config).unwrap();
+
+        assert_eq!(layer.layer_type(), LayerType::Input);
     }
 
     #[test]
