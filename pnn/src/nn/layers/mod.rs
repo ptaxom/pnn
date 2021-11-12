@@ -40,15 +40,6 @@ pub enum LayerType {
 
 impl From<&String> for LayerType {
     fn from(layer_type: &String) -> Self {
-        let mut map: HashMap<String, LayerType> = HashMap::new();
-        map.insert(String::from("input"), LayerType::Input);
-        map.insert(String::from("net"), LayerType::Input);
-        map.insert(String::from("convolutional"), LayerType::Convolutional);
-        map.insert(String::from("maxpool"), LayerType::Maxpool);
-        map.insert(String::from("route"), LayerType::Route);
-        map.insert(String::from("shortcut"), LayerType::Shortcut);
-        map.insert(String::from("upsample"), LayerType::Upsample);
-        map.insert(String::from("yolo"), LayerType::YoloLayer);
 
         if layer_type == "input" || layer_type == "net" {
             return LayerType::Input
@@ -62,6 +53,8 @@ impl From<&String> for LayerType {
             return LayerType::Upsample
         } else if layer_type == "yolo" {
             return LayerType::YoloLayer
+        } else if layer_type == "shortcut" {
+            return LayerType::Shortcut
         }
         LayerType::Unknown
     }

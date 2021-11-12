@@ -24,7 +24,7 @@ pub fn parse_file(filename: &str) -> Result<NNConfig, Box<dyn Error>> {
     }).collect();
 
     let section_start_re = Regex::new(r"^\[[A-Za-z]*\]$").unwrap();
-    let statement_re = Regex::new(r"^[A-Za-z]*=\w*").unwrap();
+    let statement_re = Regex::new(r"^[A-Za-z|_]*=\w*").unwrap();
     let mut config: NNConfig = vec![];
 
     for line in lines {
