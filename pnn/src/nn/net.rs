@@ -13,14 +13,17 @@ pub enum Link {
     Forward,
     Backward,
     None,
-    Optimized
 }
 
 pub struct Network {
     // List of layers
-    pub layers: Vec<LayerRef>,
+    layers: Vec<LayerRef>,
     // Layer connectivity graph
     adjency_matrix: Vec<Vec<Link>>,
+    // Input layers 
+    input_layers: Vec<LayerRef>,
+    // Output layers
+    output_layers: Vec<LayerRef>
 }
 
 
@@ -43,12 +46,94 @@ impl Network {
         }
     }
 
+    // Link layer with index origin to layer with index target
+    fn link_layers(&mut self, origin: usize, target: usize) {
+        self.adjency_matrix[origin][target] = Link::Forward;
+        self.adjency_matrix[target][origin] = Link::Backward;
+    }
+
+    fn reset_adjency_matrix(&mut self) {
+        let mut adjency_matrix: Vec<Vec<Link>> = Vec::new();
+        let n_layers = self.layers.len();
+        for _ in 0..n_layers {
+            let mut row: Vec<Link> = Vec::new();
+            row.resize(n_layers, Link::None);
+            adjency_matrix.push(row);
+        }
+        self.adjency_matrix = adjency_matrix;
+    }
+
+    // Default implementation to link generic layer
+    fn link_layer(&mut self, index: usize) -> Result<(), DeserializationError> {
+        let layer = &self.layers[index];
+        let input_indices = layer.as_ref().borrow().input_indices(index)?;
+        for src_id in input_indices {
+            self.link_layers(src_id, index);
+        }
+        self.link_layers(index, index + 1);
+        Ok(())
+    }
+
+    fn build_adjency_matrix(&mut self) -> Result<(), DeserializationError> {
+        self.reset_adjency_matrix();
+
+        let n_layers = self.layers.len();
+        let mut removed_routes: Vec<usize> = Vec::new();
+        
+        for layer_pos in 0..n_layers-1 {
+           let layer = &self.layers[layer_pos];
+           let layer_type = layer.as_ref().borrow().layer_type();
+           match layer_type {
+            LayerType::Input => self.link_layers(layer_pos, layer_pos + 1),
+            LayerType::Route => { // Separatly handle RouteLayer, because of it can be just redirection or mixin
+                let input_indices = layer.as_ref().borrow().input_indices(layer_pos)?;
+                if input_indices.len() == 1 { // If it just redirection from some layer to another
+                    removed_routes.insert(0, layer_pos);
+                    self.link_layers(input_indices[0], layer_pos + 1);
+                } else {
+                    self.link_layer(layer_pos)?;
+                }
+            }
+            _ => {
+                self.link_layer(layer_pos)?;
+            }
+           }
+        }
+
+        // Dropping rows/cols with optimized routes
+        for &index in &removed_routes {
+            self.adjency_matrix.remove(index);
+            self.layers.remove(index);
+        }
+        for row in &mut self.adjency_matrix {
+            for &index in &removed_routes {
+                row.remove(index);
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn from_darknet(darknet_cfg: String) -> Result<Self, Box<dyn std::error::Error>> {
         let config = parse_file(&darknet_cfg)?;
+        if config.len() < 2 {
+            return Err(
+                Box::new(DeserializationError{description: String::from("Network must contain at least input and output layers")})
+            )
+        }
         let mut layers: Vec<LayerRef> = Vec::new();
+        let mut input_layers: Vec<LayerRef> = Vec::new();
+        let mut output_layers: Vec<LayerRef> = Vec::new();
         for layer_cfg in config {
             let layer = Network::parse_layer(layer_cfg)?;
-            layers.push(Rc::new(RefCell::new(layer)));
+            let layer = Rc::new(RefCell::new(layer));
+
+            layers.push(layer.clone());
+            match layer.as_ref().borrow().layer_type() {
+                LayerType::Input => input_layers.push(layer.clone()),
+                LayerType::YoloLayer => output_layers.push(layer.clone()),
+                _ => ()
+            };
         }
 
         let adjency_matrix: Vec<Vec<Link>> = Vec::new();
@@ -57,8 +142,9 @@ impl Network {
             let mut row: Vec<Link> = Vec::new();
             row.resize(n_layers, Link::None);
         }
-
-        Ok(Network{layers, adjency_matrix})
+        let mut net = Network{layers, adjency_matrix, input_layers, output_layers};
+        net.build_adjency_matrix()?;
+        Ok(net)
     }
 
 }
@@ -70,6 +156,6 @@ mod tests {
     #[test]
     fn load_yolov4_csp() {
         let net = Network::from_darknet(String::from("../cfgs/tests/yolov4-csp.cfg")).unwrap();
-        assert_eq!(net.layers.len(), 176);
+        assert_eq!(net.layers.len(), 161);
     }
 }
