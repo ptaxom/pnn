@@ -90,6 +90,10 @@ pub fn ensure_positive(value: usize, key: &str, layer: &str) -> Result<(), Deser
     }
 }
 
+fn print_type_of<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

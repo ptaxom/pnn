@@ -2,30 +2,47 @@ use super::layers::*;
 use std::{
     rc::Rc,
     cell::RefCell,
-    collections::HashMap
+    collections::HashMap,
+    fmt
 };
 use crate::parsers::*;
+use super::shape::*;
 
 pub type LayerRef = Rc<RefCell<Box<dyn Layer>>>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Link {
     Forward,
     Backward,
     None,
 }
 
+#[derive(Debug)]
+pub enum BuildError {
+    DimInferError(ShapeError),
+    Rebuild,
+}
+
+impl fmt::Display for BuildError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BuildError::DimInferError(e) => write!(f, "{}", e),
+            BuildError::Rebuild => write!(f, "Network already builded"),
+            _ => write!(f, "Unknown BuildError"),
+        }
+    }
+}
+
+impl std::error::Error for BuildError {}
+
 pub struct Network {
     // List of layers
     layers: Vec<LayerRef>,
     // Layer connectivity graph
     adjency_matrix: Vec<Vec<Link>>,
-    // Input layers 
-    input_layers: Vec<LayerRef>,
-    // Output layers
-    output_layers: Vec<LayerRef>
+    // Batchsize
+    batchsize: Option<usize>
 }
-
 
 impl Network {
 
@@ -123,20 +140,17 @@ impl Network {
             )
         }
         let mut layers: Vec<LayerRef> = Vec::new();
-        let mut input_layers: Vec<LayerRef> = Vec::new();
-        let mut output_layers: Vec<LayerRef> = Vec::new();
+        let mut n_inputs = 0;
         for layer_cfg in config {
             let layer = Network::parse_layer(layer_cfg)?;
             let layer = Rc::new(RefCell::new(layer));
+            if layer.as_ref().borrow().layer_type() == LayerType::Input {
+                n_inputs += 1;
+            }
 
             layers.push(layer.clone());
-            match layer.as_ref().borrow().layer_type() {
-                LayerType::Input => input_layers.push(layer.clone()),
-                LayerType::YoloLayer => output_layers.push(layer.clone()),
-                _ => ()
-            };
         }
-        if input_layers.len() != 1 {
+        if n_inputs != 1 {
             return Err(
                 Box::new(DeserializationError{description: String::from("Supported only exact one input layer")})
             )
@@ -148,7 +162,8 @@ impl Network {
             let mut row: Vec<Link> = Vec::new();
             row.resize(n_layers, Link::None);
         }
-        let mut net = Network{layers, adjency_matrix, input_layers, output_layers};
+        let batchsize: Option<usize> = None;
+        let mut net = Network{layers, adjency_matrix, batchsize};
         net.build_adjency_matrix()?;
         Ok(net)
     }
@@ -165,10 +180,14 @@ impl Network {
 
         let mut statements = StmtList::new();
         for i in 0..n_layers {
+            let l_shape = self.layers[i].as_ref().borrow().shape().unwrap();
             statements = statements.add_node(
                 Identity::id(&names[i]).unwrap(),
                 None,
-                Some(AttrList::new().add_pair(shape(Shape::Box)))
+                Some(AttrList::new()
+                    .add_pair(shape(Shape::None))
+                    .add_pair(label(format!("<<table border='0' cellspacing='0'><tr><td border='1'>{}</td></tr><tr><td border='1'>{}</td></tr></table>>", names[i], l_shape)))
+                )
             );
         }
 
@@ -193,10 +212,36 @@ impl Network {
             .stmts(statements)
             .build()
             .unwrap();
-        write(dot_path, graph.to_string())?;
+        write(dot_path, graph.to_string().replace("\"", ""))?;
         Ok(())
     }
 
+    pub fn set_batchsize(&mut self, batch: usize) -> Result<(), BuildError> {
+        if let Some(_) = self.batchsize {
+            return Err(BuildError::Rebuild)
+        }
+        self.batchsize = Some(batch);
+
+        {
+            let mut first_layer_ref = self.layers[0].as_ref().borrow_mut();
+            let input_l = first_layer_ref.as_any_mut().downcast_mut::<InputLayer>().unwrap();
+            input_l.set_batchsize(batch);
+        }
+        
+        for i in 1..self.layers.len() {
+            let mut shapes = Vec::new();
+            for (col, link) in self.adjency_matrix[i].iter().enumerate() {
+                if *link == Link::Backward {
+                    let shape = self.layers[col].as_ref().borrow().shape().unwrap();
+                    shapes.push(shape);
+                }
+            }
+            self.layers[i].as_ref().borrow_mut().infer_shape(shapes).map_err(|x| {
+                BuildError::DimInferError(x)
+            })?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
