@@ -94,6 +94,7 @@ impl Network {
                     self.link_layer(layer_pos)?;
                 }
             }
+            LayerType::YoloLayer => (),
             _ => {
                 self.link_layer(layer_pos)?;
             }
@@ -134,6 +135,11 @@ impl Network {
                 LayerType::YoloLayer => output_layers.push(layer.clone()),
                 _ => ()
             };
+        }
+        if input_layers.len() != 1 {
+            return Err(
+                Box::new(DeserializationError{description: String::from("Supported only exact one input layer")})
+            )
         }
 
         let adjency_matrix: Vec<Vec<Link>> = Vec::new();

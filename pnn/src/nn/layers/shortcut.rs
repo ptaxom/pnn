@@ -91,7 +91,8 @@ impl Layer for ShortcutLayer {
             return Err(DeserializationError{description: String::from("Couldnt compute input index for first or second layer")})
         }
         let indeces: Result<Vec<usize>, DeserializationError> = self.from.iter().map(|x| {
-            let index: i32 = if *x > 0i32 {*x} else {position as i32 + *x};
+            // -1 to compensate input layer during absolute index. # TODO: fix it
+            let index: i32 = if *x > 0i32 {*x + 1} else {position as i32 + *x};
             if index >= position as i32 || index < 0 {
                 return Err(DeserializationError{description: format!("Couldnt reffer to {} from '{}'", index, self.name)})
             }
