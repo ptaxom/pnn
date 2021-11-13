@@ -24,6 +24,13 @@ pub trait Layer {
     fn infer_shape(&mut self, input_shapes: Vec<Rc<dyn Shape>>) -> Result<(), ShapeError>;
 
     fn layer_type(&self) -> LayerType;
+
+    fn input_indices(&self, position: usize) -> Result<Vec<usize>, DeserializationError> {
+        if position == 0 {
+            return Err(DeserializationError{description: String::from("Couldnt compute input index for first layer")})
+        }
+        Ok(vec![position - 1])
+    }
 }
 
 #[derive(Debug, PartialEq)]

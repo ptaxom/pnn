@@ -81,6 +81,20 @@ impl Layer for RouteLayer {
         LayerType::Route
     }
 
+    fn input_indices(&self, position: usize) -> Result<Vec<usize>, DeserializationError> {
+        if position == 0 {
+            return Err(DeserializationError{description: String::from("Couldnt compute input index for first layer")})
+        }
+        let indeces: Result<Vec<usize>, DeserializationError> = self.layers.iter().map(|x| {
+            let index: i32 = if *x > 0i32 {*x} else {position as i32 + *x};
+            if index >= position as i32 || index < 0 {
+                return Err(DeserializationError{description: format!("Couldnt reffer to {} from '{}'", index, self.name)})
+            }
+            Ok(index as usize)
+        }).collect();
+        indeces
+    }
+
 }
 
 
@@ -180,6 +194,40 @@ mod tests {
     fn test_layer_type() {
         let layer = RouteLayer::from_config(generate_config()).unwrap();
         assert_eq!(layer.layer_type(), LayerType::Route);
+    }
+
+    #[test]
+    fn test_input_indeces() {
+        let mut config: HashMap<String, String> = HashMap::new();
+        config.insert(String::from("layers"), String::from("-4 ,-5, -6"));
+        let layer = RouteLayer::from_config(config).unwrap();
+        assert_eq!(layer.input_indices(20).unwrap(), [16usize, 15usize, 14usize]);
+    }
+
+    #[test]
+    fn test_input_indeces_absolute() {
+        let mut config: HashMap<String, String> = HashMap::new();
+        config.insert(String::from("layers"), String::from("-4 ,-5, -6, 2"));
+        let layer = RouteLayer::from_config(config).unwrap();
+        assert_eq!(layer.input_indices(20).unwrap(), [16usize, 15usize, 14usize, 2usize]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_input_indeces_fail() {
+        let mut config: HashMap<String, String> = HashMap::new();
+        config.insert(String::from("layers"), String::from("-4 ,-5, -6"));
+        let layer = RouteLayer::from_config(config).unwrap();
+        layer.input_indices(5).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_input_indeces_fail_forward_ref() {
+        let mut config: HashMap<String, String> = HashMap::new();
+        config.insert(String::from("layers"), String::from("-4 ,-5, -6, 22"));
+        let layer = RouteLayer::from_config(config).unwrap();
+        layer.input_indices(20).unwrap();
     }
 
 

@@ -86,6 +86,22 @@ impl Layer for ShortcutLayer {
         LayerType::Shortcut
     }
 
+    fn input_indices(&self, position: usize) -> Result<Vec<usize>, DeserializationError> {
+        if position < 2 {
+            return Err(DeserializationError{description: String::from("Couldnt compute input index for first or second layer")})
+        }
+        let indeces: Result<Vec<usize>, DeserializationError> = self.from.iter().map(|x| {
+            let index: i32 = if *x > 0i32 {*x} else {position as i32 + *x};
+            if index >= position as i32 || index < 0 {
+                return Err(DeserializationError{description: format!("Couldnt reffer to {} from '{}'", index, self.name)})
+            }
+            Ok(index as usize)
+        }).collect();
+        let mut indeces = indeces?;
+        indeces.push(position - 1);
+        Ok(indeces)
+    }
+
 }
 
 
@@ -178,6 +194,40 @@ mod tests {
     fn test_layer_type() {
         let layer = ShortcutLayer::from_config(generate_config()).unwrap();
         assert_eq!(layer.layer_type(), LayerType::Shortcut);
+    }
+
+    #[test]
+    fn test_input_indeces() {
+        let mut config: HashMap<String, String> = HashMap::new();
+        config.insert(String::from("from"), String::from("-4 ,-5, -6"));
+        let layer = ShortcutLayer::from_config(config).unwrap();
+        assert_eq!(layer.input_indices(20).unwrap(), [16usize, 15usize, 14usize, 19usize]);
+    }
+
+    #[test]
+    fn test_input_indeces_absolute() {
+        let mut config: HashMap<String, String> = HashMap::new();
+        config.insert(String::from("from"), String::from("-4 ,-5, -6, 2"));
+        let layer = ShortcutLayer::from_config(config).unwrap();
+        assert_eq!(layer.input_indices(20).unwrap(), [16usize, 15usize, 14usize, 2usize, 19usize]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_input_indeces_fail() {
+        let mut config: HashMap<String, String> = HashMap::new();
+        config.insert(String::from("from"), String::from("-4 ,-5, -6"));
+        let layer = ShortcutLayer::from_config(config).unwrap();
+        layer.input_indices(5).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_input_indeces_fail_forward_ref() {
+        let mut config: HashMap<String, String> = HashMap::new();
+        config.insert(String::from("from"), String::from("-4 ,-5, -6, 22"));
+        let layer = ShortcutLayer::from_config(config).unwrap();
+        layer.input_indices(20).unwrap();
     }
 
 }
