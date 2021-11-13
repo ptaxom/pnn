@@ -12,3 +12,4 @@ itertools = "0.8.2"
 pnn-sys = { path = "../pnn-sys" }
 libc = "0.2"
 log = "0.4.14"
+tabbycat = { git = "https://github.com/SchrodingerZhu/tabbycat", features=["attributes"]}

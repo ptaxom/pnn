@@ -147,6 +147,50 @@ impl Network {
         Ok(net)
     }
 
+    pub fn render(&self, dot_path: String) -> Result<(), std::io::Error> {
+        use tabbycat::attributes::*;
+        use tabbycat::{AttrList, GraphBuilder, GraphType, Identity, StmtList, Edge, SubGraph};
+        use std::fs::write;
+
+        let names: Vec<String> = self.layers.iter().map(|x| {
+            x.as_ref().borrow().name()
+        }).collect();
+        let n_layers = self.layers.len();
+
+        let mut statements = StmtList::new();
+        for i in 0..n_layers {
+            statements = statements.add_node(
+                Identity::id(&names[i]).unwrap(),
+                None,
+                Some(AttrList::new().add_pair(shape(Shape::Box)))
+            );
+        }
+
+        for head_id in 0..n_layers-1 {
+            for target_id in head_id+1..n_layers {
+                match self.adjency_matrix[head_id][target_id] {
+                    Link::Forward => {
+                        statements = statements.add_edge(
+                            Edge::head_node(Identity::id(&names[head_id]).unwrap(), None)
+                                .arrow_to_node(Identity::id(&names[target_id]).unwrap(), None)
+                        )
+                    },
+                    _ => ()
+                }
+            }
+        }
+
+        let graph = GraphBuilder::default()
+            .graph_type(GraphType::DiGraph)
+            .strict(false)
+            .id(Identity::id("G").unwrap())
+            .stmts(statements)
+            .build()
+            .unwrap();
+        write(dot_path, graph.to_string())?;
+        Ok(())
+    }
+
 }
 
 #[cfg(test)]
