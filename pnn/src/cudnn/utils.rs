@@ -555,7 +555,7 @@ pub fn cudnnDestroyTensorDescriptor(tensorDesc: cudnnTensorDescriptor_t) -> Resu
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum cudnnDataType {
     FLOAT = 0,
     DOUBLE = 1,
@@ -649,6 +649,125 @@ pub fn cudnnAddTensor(
             std::ptr::addr_of!(beta) as *const c_void,
             cDesc,
             C
+        );
+        match  res{
+            0 => Ok(()),
+            x => Err(cudnnError::from(x))
+        }
+    }
+}
+
+
+pub use pnn_sys::{cudnnFilterDescriptor_t, cudnnConvolutionDescriptor_t};
+
+pub fn cudnnCreateFilterDescriptor() -> Result<cudnnFilterDescriptor_t, cudnnError> {
+    use pnn_sys::cudnnCreateFilterDescriptor;
+
+    unsafe {
+        let mut ptr: cudnnFilterDescriptor_t = std::ptr::null_mut() as cudnnFilterDescriptor_t;
+        let res = cudnnCreateFilterDescriptor(&mut ptr as *mut cudnnFilterDescriptor_t);
+        match  res{
+            0 => Ok(ptr),
+            x => Err(cudnnError::from(x))
+        }
+    }
+}
+
+pub fn cudnnDestroyFilterDescriptor(filterDesc: cudnnFilterDescriptor_t) -> Result<(), cudnnError> {
+    use pnn_sys::cudnnDestroyFilterDescriptor;
+
+    unsafe {
+        let res = cudnnDestroyFilterDescriptor(filterDesc);
+        match  res{
+            0 => Ok(()),
+            x => Err(cudnnError::from(x))
+        }
+    }
+}
+
+pub fn cudnnSetFilter4dDescriptor(
+    filterDesc: cudnnFilterDescriptor_t,
+    data_type: cudnnDataType,
+    k: usize,
+    c: usize,
+    h: usize,
+    w: usize,
+) -> Result<(), cudnnError> {
+    use pnn_sys::{
+        cudnnSetFilter4dDescriptor, 
+        cudnnTensorFormat_t_CUDNN_TENSOR_NCHW, 
+        cudnnDataType_t
+    };
+
+    unsafe {
+        let res = cudnnSetFilter4dDescriptor(
+            filterDesc,
+            cudnnTensorFormat_t_CUDNN_TENSOR_NCHW, 
+            data_type as cudnnDataType_t,
+            k as ::std::os::raw::c_int,
+            c as ::std::os::raw::c_int,
+            h as ::std::os::raw::c_int,
+            w as ::std::os::raw::c_int
+        );
+        match  res{
+            0 => Ok(()),
+            x => Err(cudnnError::from(x))
+        }
+    }
+}
+
+pub fn cudnnCreateConvolutionDescriptor() -> Result<cudnnConvolutionDescriptor_t, cudnnError> {
+    use pnn_sys::cudnnCreateConvolutionDescriptor;
+
+    unsafe {
+        let mut ptr = std::ptr::null_mut() as cudnnConvolutionDescriptor_t;
+        let res = cudnnCreateConvolutionDescriptor(&mut ptr as *mut cudnnConvolutionDescriptor_t);
+        match  res{
+            0 => Ok(ptr),
+            x => Err(cudnnError::from(x))
+        }
+    }
+}
+
+pub fn cudnnDestroyConvolutionDescriptor(convDesc: cudnnConvolutionDescriptor_t) -> Result<(), cudnnError> {
+    use pnn_sys::cudnnDestroyConvolutionDescriptor;
+
+    unsafe {
+        let res = cudnnDestroyConvolutionDescriptor(convDesc);
+        match  res{
+            0 => Ok(()),
+            x => Err(cudnnError::from(x))
+        }
+    }
+}
+
+pub fn cudnnSetConvolution2dDescriptor(
+    convDesc: cudnnConvolutionDescriptor_t,
+    pad_h: usize,
+    pad_w: usize,
+    u: usize,
+    v: usize,
+    dilation_h: usize,
+    dilation_w: usize,
+    computeType: cudnnDataType,
+) -> Result<(), cudnnError> {
+    use pnn_sys::{
+        cudnnSetConvolution2dDescriptor, 
+        cudnnConvolutionMode_t_CUDNN_CROSS_CORRELATION, 
+        cudnnDataType_t
+    };
+
+    unsafe {
+        let res = cudnnSetConvolution2dDescriptor(
+            convDesc,
+            pad_h as ::std::os::raw::c_int,
+            pad_w as ::std::os::raw::c_int,
+            u as ::std::os::raw::c_int,
+            v as ::std::os::raw::c_int,
+            dilation_h as ::std::os::raw::c_int,
+            dilation_w as ::std::os::raw::c_int,
+            cudnnConvolutionMode_t_CUDNN_CROSS_CORRELATION, // Use CC by default
+            computeType as cudnnDataType_t,
         );
         match  res{
             0 => Ok(()),
