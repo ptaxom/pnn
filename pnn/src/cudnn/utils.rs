@@ -478,6 +478,19 @@ pub fn cudaMalloc(size: usize) -> Result<*mut c_void, cudaError> {
     }
 }
 
+pub fn cudaMallocHost(size: usize) -> Result<*mut c_void, cudaError> {
+    use pnn_sys::cudaMallocHost;
+
+    unsafe {
+        let mut ptr: *mut c_void = std::ptr::null_mut();
+        let res = cudaMallocHost(&mut ptr as *mut *mut c_void, size);
+        match  res{
+            0 => Ok(ptr),
+            x => Err(cudaError::from(x))
+        }
+    }
+}
+
 pub fn cudaFree(ptr: *mut c_void) -> Result<(), cudaError> {
     use pnn_sys::cudaFree;
 
@@ -542,6 +555,7 @@ pub fn cudnnDestroyTensorDescriptor(tensorDesc: cudnnTensorDescriptor_t) -> Resu
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum cudnnDataType {
     FLOAT = 0,
     DOUBLE = 1,
