@@ -2,11 +2,10 @@ use super::layers::*;
 use std::{
     rc::Rc,
     cell::RefCell,
-    collections::HashMap,
-    fmt
+    collections::HashMap
 };
 use crate::parsers::*;
-use super::shape::*;
+use crate::nn::errors::*;
 
 pub type LayerRef = Rc<RefCell<Box<dyn Layer>>>;
 
@@ -16,24 +15,6 @@ pub enum Link {
     Backward,
     None,
 }
-
-#[derive(Debug)]
-pub enum BuildError {
-    DimInferError(ShapeError),
-    Rebuild,
-}
-
-impl fmt::Display for BuildError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            BuildError::DimInferError(e) => write!(f, "{}", e),
-            BuildError::Rebuild => write!(f, "Network already builded"),
-            _ => write!(f, "Unknown BuildError"),
-        }
-    }
-}
-
-impl std::error::Error for BuildError {}
 
 pub struct Network {
     // List of layers
@@ -58,7 +39,7 @@ impl Network {
             LayerType::YoloLayer => YoloLayer::from_config(config),
             LayerType::Maxpool => MaxpoolLayer::from_config(config),            
             LayerType::Unknown => return Err(
-                DeserializationError{description: format!("Couldnt deserialize config for '{}'", key)}
+                DeserializationError(format!("Couldnt deserialize config for '{}'", key))
             ),
         }
     }
@@ -136,7 +117,7 @@ impl Network {
         let config = parse_file(&darknet_cfg)?;
         if config.len() < 2 {
             return Err(
-                Box::new(DeserializationError{description: String::from("Network must contain at least input and output layers")})
+                Box::new(DeserializationError(String::from("Network must contain at least input and output layers")))
             )
         }
         let mut layers: Vec<LayerRef> = Vec::new();
@@ -152,7 +133,7 @@ impl Network {
         }
         if n_inputs != 1 {
             return Err(
-                Box::new(DeserializationError{description: String::from("Supported only exact one input layer")})
+                Box::new(DeserializationError(String::from("Supported only exact one input layer")))
             )
         }
 
@@ -170,7 +151,7 @@ impl Network {
 
     pub fn render(&self, dot_path: String) -> Result<(), std::io::Error> {
         use tabbycat::attributes::*;
-        use tabbycat::{AttrList, GraphBuilder, GraphType, Identity, StmtList, Edge, SubGraph};
+        use tabbycat::{AttrList, GraphBuilder, GraphType, Identity, StmtList, Edge};
         use std::fs::write;
 
         let names: Vec<String> = self.layers.iter().map(|x| {

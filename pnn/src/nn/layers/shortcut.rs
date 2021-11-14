@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::nn::shape::*;
-use crate::nn::{Layer, LayerType};
+use crate::nn::{Layer, LayerType, errors::*};
 use crate::parsers::{DeserializationError, parse_list_field};
 
 
@@ -45,12 +45,12 @@ impl Layer for ShortcutLayer {
 
     fn infer_shape(&mut self, input_shapes: Vec<Rc<dyn Shape>>) -> Result<(), ShapeError> {
         if input_shapes.len() < 2 {
-            return Err(ShapeError{description: String::from("ShortcutLayer must connect at least 2 layers")})
+            return Err(ShapeError(String::from("ShortcutLayer must connect at least 2 layers")))
         }
         let input_dim = input_shapes[0].dims();
         for shape in &input_shapes {
             if shape.dims().iter().cmp(input_dim.iter()) != std::cmp::Ordering::Equal {
-                return Err(ShapeError{description: String::from("All input tensors at ShortcutLayer must have same shape")});
+                return Err(ShapeError(String::from("All input tensors at ShortcutLayer must have same shape")));
             }
         }
         self.shape = Some(Rc::new(LayerShape::new(input_dim.clone())));
@@ -88,13 +88,13 @@ impl Layer for ShortcutLayer {
 
     fn input_indices(&self, position: usize) -> Result<Vec<usize>, DeserializationError> {
         if position < 2 {
-            return Err(DeserializationError{description: String::from("Couldnt compute input index for first or second layer")})
+            return Err(DeserializationError(String::from("Couldnt compute input index for first or second layer")))
         }
         let indeces: Result<Vec<usize>, DeserializationError> = self.from.iter().map(|x| {
             // -1 to compensate input layer during absolute index. # TODO: fix it
             let index: i32 = if *x > 0i32 {*x + 1} else {position as i32 + *x};
             if index >= position as i32 || index < 0 {
-                return Err(DeserializationError{description: format!("Couldnt reffer to {} from '{}'", index, self.name)})
+                return Err(DeserializationError(format!("Couldnt reffer to {} from '{}'", index, self.name)))
             }
             Ok(index as usize)
         }).collect();
@@ -210,7 +210,7 @@ mod tests {
         let mut config: HashMap<String, String> = HashMap::new();
         config.insert(String::from("from"), String::from("-4 ,-5, -6, 2"));
         let layer = ShortcutLayer::from_config(config).unwrap();
-        assert_eq!(layer.input_indices(20).unwrap(), [16usize, 15usize, 14usize, 2usize, 19usize]);
+        assert_eq!(layer.input_indices(20).unwrap(), [16usize, 15usize, 14usize, 3usize, 19usize]);
     }
 
     #[test]

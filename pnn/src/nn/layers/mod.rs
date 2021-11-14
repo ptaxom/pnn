@@ -6,6 +6,7 @@ use std::{
 };
 
 use crate::nn::shape::*;
+use crate::nn::errors::*;
 use crate::parsers::DeserializationError;
 
 pub trait Layer {
@@ -27,7 +28,7 @@ pub trait Layer {
 
     fn input_indices(&self, position: usize) -> Result<Vec<usize>, DeserializationError> {
         if position == 0 {
-            return Err(DeserializationError{description: String::from("Couldnt compute input index for first layer")})
+            return Err(DeserializationError(String::from("Couldnt compute input index for first layer")))
         }
         Ok(vec![position - 1])
     }

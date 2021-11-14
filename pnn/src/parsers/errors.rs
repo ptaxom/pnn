@@ -3,28 +3,24 @@ use std::{fmt,
     self};
 
 #[derive(Debug)]
-pub struct DeserializationError {
-    pub description: String,
-}
+pub struct DeserializationError(pub String);
 
 impl fmt::Display for DeserializationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.description)
+        write!(f, "{}", self.0)
     }
 }
 
 impl Error for DeserializationError {}
 
 #[derive(Debug)]
-pub struct ParseError {
-    pub description: String,
-}
+pub struct ParseError(pub String);
 
 impl ParseError {
     pub fn generate<T>(err: &str) -> Result<T, Box<dyn Error>> {
         Err(
             Box::new(
-                ParseError {description: String::from("Couldnt parse line ") + err}
+                ParseError(String::from("Couldnt parse line ") + err)
             )
         )
     }
@@ -32,7 +28,7 @@ impl ParseError {
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.description)
+        write!(f, "{}", self.0)
     }
 }
 

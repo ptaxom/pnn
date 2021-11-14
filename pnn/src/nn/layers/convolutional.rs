@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::nn::shape::*;
-use crate::nn::{Layer, LayerType};
+use crate::nn::{Layer, LayerType, errors::*};
 use crate::parsers::{DeserializationError, parse_numerical_field};
 
 
@@ -60,11 +60,11 @@ impl Layer for ConvolutionalLayer {
 
     fn infer_shape(&mut self, input_shapes: Vec<Rc<dyn Shape>>) -> Result<(), ShapeError> {
         if input_shapes.len() != 1 {
-            return Err(ShapeError{description: String::from("Convolutional layer must have exact one input layer")})
+            return Err(ShapeError(String::from("Convolutional layer must have exact one input layer")))
         }
         let input_shape = &input_shapes[0];
         if input_shape.dims().len() != 4 {
-            return Err(ShapeError{description: String::from("Convolutional layer can be connected only with layer, which produce 4D Tensor with format NCHW")})
+            return Err(ShapeError(String::from("Convolutional layer can be connected only with layer, which produce 4D Tensor with format NCHW")))
         }
         let n = input_shape.N();
         let delta = if self.pad {self.padding as i32} else {0};
@@ -74,7 +74,7 @@ impl Layer for ConvolutionalLayer {
                       + 2 * delta
                       + self.stride as i32) / self.stride as i32;
         if h <= 0 {
-            return Err(ShapeError{description: format!("Couldnt set height to {}", h)});
+            return Err(ShapeError(format!("Couldnt set height to {}", h)));
         }
 
         let w: i32 = (input_shape.W().unwrap() as i32
@@ -82,7 +82,7 @@ impl Layer for ConvolutionalLayer {
                       + 2 * delta
                       + self.stride as i32) / self.stride as i32;
         if w <= 0 {
-            return Err(ShapeError{description: format!("Couldnt set width to {}", w)});
+            return Err(ShapeError(format!("Couldnt set width to {}", w)));
         }
 
         self.shape = Some(Rc::new(LayerShape::from_nchw(n, self.filters, h as usize, w as usize)));

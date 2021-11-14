@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::nn::shape::*;
-use crate::nn::{Layer, LayerType};
+use crate::nn::{Layer, LayerType, errors::*};
 use crate::parsers::{DeserializationError, parse_numerical_field};
 
 
@@ -61,7 +61,7 @@ impl Layer for InputLayer {
         if let Some(width) = parse_numerical_field::<usize>(&config, "width", false, None)? {
             match dims.len() {
                 2 => dims.push(width),
-                _ => return Err(DeserializationError{description: String::from("Couldnt use key 'width' without key 'height' in InputLayer")})
+                _ => return Err(DeserializationError(String::from("Couldnt use key 'width' without key 'height' in InputLayer")))
             }
         }
         Ok(Box::new(InputLayer{name, shape, dims}))

@@ -67,7 +67,7 @@ impl Tensor {
     pub fn load(&mut self, other: &Vec<f32>) -> Result<(), Box<dyn Error>> {
         // #TODO: copy host -> host, and then host -> device. rework
         if self.shape.size() != other.len() {
-            return Err(Box::new(ShapeError{description: String::from("Couldnt load from array with wrong size")}))
+            return Err(Box::new(ShapeError(String::from("Couldnt load from array with wrong size"))))
         }
         self.host_data = Some(other.clone());
         self.sync_with_host()?;

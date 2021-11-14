@@ -1,25 +1,12 @@
 #![allow(non_snake_case)]
 
 use std::{
-    error::Error,
     fmt,
     self,
     any::Any
 };
 use core::fmt::Debug;
-
-#[derive(Debug)]
-pub struct ShapeError {
-    pub description: String,
-}
-
-impl fmt::Display for ShapeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.description)
-    }
-}
-
-impl Error for ShapeError {}
+use crate::nn::errors::*;
 
 pub trait Shape: fmt::Display {
     fn N(&self) -> usize;
@@ -109,10 +96,10 @@ impl Shape for LayerShape {
 
     fn concat(&self, other: &dyn Shape, axis: usize) -> Result<Box<dyn Shape> , ShapeError> {
         if axis == 0 {
-            return Err(ShapeError{ description: String::from("Couldnt concat shapes by batch size")})
+            return Err(ShapeError(String::from("Couldnt concat shapes by batch size")))
         }
         if self.dims.len() != other.dims().len(){
-            return Err(ShapeError{ description: String::from("Couldnt concat shapes with different size")})
+            return Err(ShapeError(String::from("Couldnt concat shapes with different size")))
         }
         let mut new_dims = vec![self.dims[0]];
         for i in 1..self.dims.len() {
@@ -122,7 +109,7 @@ impl Shape for LayerShape {
             } else if self.dims[i] == other.dims()[i] {
                 dim = self.dims[i]
             } else {
-                return  Err(ShapeError{ description: format!("Couldnt concat across axis {}", i)})
+                return  Err(ShapeError(format!("Couldnt concat across axis {}", i)))
             }
             new_dims.push(dim);
         }

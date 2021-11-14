@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::nn::shape::*;
-use crate::nn::{Layer, LayerType};
+use crate::nn::{Layer, LayerType, errors::*};
 use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positive};
 
 
@@ -48,21 +48,21 @@ impl Layer for MaxpoolLayer {
  
     fn infer_shape(&mut self, input_shapes: Vec<Rc<dyn Shape>>) -> Result<(), ShapeError> {
         if input_shapes.len() != 1 {
-            return Err(ShapeError{description: String::from("MaxpoolLayer must have exact one input layer")})
+            return Err(ShapeError(String::from("MaxpoolLayer must have exact one input layer")))
         }
         let input_shape = &input_shapes[0];
         if input_shape.dims().len() != 4 {
-            return Err(ShapeError{description: String::from("MaxpoolLayer can be connected only with layer, which produce 4D Tensor with format NCHW")})
+            return Err(ShapeError(String::from("MaxpoolLayer can be connected only with layer, which produce 4D Tensor with format NCHW")))
         }
         
         let h = (input_shape.H().unwrap() + self.padding - self.size) / self.stride + 1;
         if h < 1 {
-            return Err(ShapeError{description: String::from("Resulting height is less then 1")});
+            return Err(ShapeError(String::from("Resulting height is less then 1")));
         }
 
         let w = (input_shape.W().unwrap() + self.padding - self.size) / self.stride + 1;
         if w < 1 {
-            return Err(ShapeError{description: String::from("Resulting width is less then 1")});
+            return Err(ShapeError(String::from("Resulting width is less then 1")));
         }
 
         self.shape = Some(Rc::new(LayerShape::from_nchw(input_shape.N(), input_shape.C(), h, w)));

@@ -59,10 +59,10 @@ where T: std::str::FromStr
     match str_value {
         Some(x) => match x.parse::<T>() {
             Ok(value) => return Ok(Some(value)),
-            Err(_) => return Err(DeserializationError{description: format!("Couldnt parse '{}' for key '{}'", x, key)})
+            Err(_) => return Err(DeserializationError(format!("Couldnt parse '{}' for key '{}'", x, key)))
         },
         None => match mandatory {
-            true => return Err(DeserializationError{description: format!("Key '{}' is mandatory", key)}),
+            true => return Err(DeserializationError(format!("Key '{}' is mandatory", key))),
             false => return Ok(default)
         }
     }
@@ -72,12 +72,12 @@ pub fn parse_list_field<T>(config: &HashMap<String, String>, key: &str, layer_na
 where T: std::str::FromStr
 {
     config.get(key)
-        .ok_or(DeserializationError{description: format!("Field '{}' is mandatory for {}", key, layer_name)})?
+        .ok_or(DeserializationError(format!("Field '{}' is mandatory for {}", key, layer_name)))?
         .split(',')
         .map(|x| {
             x.trim().parse::<T>()
             .map_err(|_e| {
-                DeserializationError{description: format!("Couldnt parse value '{}' in field '{}' of {}", x, key, layer_name)}
+                DeserializationError(format!("Couldnt parse value '{}' in field '{}' of {}", x, key, layer_name))
             })
         })
         .collect()
@@ -85,7 +85,7 @@ where T: std::str::FromStr
 
 pub fn ensure_positive(value: usize, key: &str, layer: &str) -> Result<(), DeserializationError> {
     match value < 1 {
-        true => return Err(DeserializationError{description: format!("Field '{}' of {} should be positive", key, layer)}),
+        true => return Err(DeserializationError(format!("Field '{}' of {} should be positive", key, layer))),
         _ => Ok(())
     }
 }
