@@ -1,4 +1,4 @@
-use crate::nn::{Shape, ShapeError};
+use crate::nn::{Shape, ShapeError, LayerShape};
 use std::{os::raw::c_void,
     fmt,
     error::Error,
@@ -21,11 +21,10 @@ pub struct Tensor {
 impl Tensor {
     pub fn new(shape: Box<dyn Shape>, ptr: Rc<RefCell<DevicePtr>>) -> Result<Self, Box<dyn std::error::Error>> {
         // allocate CUDA memory at GPU
-        // Currently support only for f32
         let tensor_desc = cudnnCreateTensorDescriptor()?;
         cudnnSetTensor4dDescriptor(
             tensor_desc,
-            cudnnDataType::FLOAT,
+            ptr.borrow().data_type(),
             shape.N(),
             shape.C(),
             shape.H().unwrap_or(1),
@@ -34,7 +33,7 @@ impl Tensor {
         Ok(Self{shape, tensor_desc, ptr})
     }
 
-    pub fn load(&mut self, other: &Vec<f32>) -> Result<(), Box<dyn Error>> {
+    pub fn load<T>(&mut self, other: &Vec<T>) -> Result<(), Box<dyn Error>> {
         // #TODO: copy host -> host, and then host -> device. rework
         if self.shape.size() != other.len() {
             return Err(Box::new(ShapeError(String::from("Couldnt load from array with wrong size"))))
@@ -49,6 +48,10 @@ impl Tensor {
 
     pub fn ptr(&mut self) -> Rc<RefCell<DevicePtr>> {
         self.ptr.clone()
+    }
+
+    pub fn shape(&self) -> Box<dyn Shape> {
+        Box::new(LayerShape::new(self.shape.dims().clone()))
     }
 }
 

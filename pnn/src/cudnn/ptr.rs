@@ -1,4 +1,4 @@
-use crate::cudnn::{cudnnDataType, cudaMallocHost, cudaFree, cudaMemcpy, cudaMemcpyKind};
+use crate::cudnn::{cudnnDataType, cudaMalloc, cudaFree, cudaMemcpy, cudaMemcpyKind};
 use crate::nn::RuntimeError;
 use std::{os::raw::c_void};
 
@@ -24,7 +24,8 @@ impl DevicePtr {
             _ => return Err(RuntimeError::Other(String::from("Unsupported cudnnDataType")))
         };
         let size = el_size * capacity;
-        let ptr = cudaMallocHost(size).map_err(|e| {
+        // #TODO: Figure out bug with cudaMallocHost
+        let ptr = cudaMalloc(size).map_err(|e| {
             RuntimeError::Cuda(e)
         })?;
         Ok(DevicePtr{ptr, capacity, data_type, size, type_name})
@@ -36,6 +37,10 @@ impl DevicePtr {
 
     pub fn size(&self) -> usize {
         self.size
+    }
+
+    pub fn data_type(&self) -> cudnnDataType {
+        self.data_type.clone()
     }
 
     pub fn load<T>(&mut self, other: &Vec<T>) -> Result<(), RuntimeError> {

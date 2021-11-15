@@ -1,5 +1,4 @@
 use std::{
-    ptr::addr_of,
     os::raw::{c_void, c_double, c_float}
 };
 use crate::cudnn::cudnnDataType;

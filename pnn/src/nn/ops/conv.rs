@@ -43,9 +43,9 @@ pub struct ConvolutionOp {
 
 // TODO: Move bindings to place of use
 impl ConvolutionOp {
-    pub fn new(input_tensor: InputTensor,
+    pub fn new(context: Rc<cudnnHandle_t>,
+        input_tensor: InputTensor,
         output_tensor: OutputTensor,
-        context: Rc<cudnnHandle_t>,
         data_type: &cudnnDataType,
         filters: usize,
         input_channels: usize,
@@ -56,6 +56,10 @@ impl ConvolutionOp {
         stride_y: usize,
         stride_x: usize
     ) -> Result<ConvolutionOp, RuntimeError> {
+        if data_type != &cudnnDataType::FLOAT {
+            return Err(RuntimeError::Other(String::from("ConvolutionOp support only full fp32 weights. Mixing precision in progress")))
+        }
+        // # TODO: Fix descriptor leaks
         let filter_desc = cudnnCreateFilterDescriptor().map_err(|e| {
             RuntimeError::Cudnn(e)
         })?;
@@ -63,13 +67,37 @@ impl ConvolutionOp {
             RuntimeError::Cudnn(e)
         })?;
 
-        let filter_data = DevicePtr::new(data_type.clone(), filters * size_x * size_y)?;
         let conv_desc = cudnnCreateConvolutionDescriptor().map_err(|e| {
             RuntimeError::Cudnn(e)
         })?;
         cudnnSetConvolution2dDescriptor(conv_desc, pad_y, pad_x, stride_y, stride_x, 1, 1, data_type.clone()).map_err(|e| {
             RuntimeError::Cudnn(e)
         })?;
+
+        unsafe {
+            let n: c_int = 0;
+            let c: c_int = 0;
+            let h: c_int = 0;
+            let w: c_int = 0;
+            let ret = pnn_sys::cudnnGetConvolution2dForwardOutputDim(
+                conv_desc,
+                input_tensor.borrow_mut().desc(),
+                filter_desc,
+                addr_of!(n) as *mut c_int,
+                addr_of!(c) as *mut c_int,
+                addr_of!(h) as *mut c_int,
+                addr_of!(w) as *mut c_int,
+            );
+            if ret != 0 {
+                return Err(RuntimeError::Cudnn(cudnnError::from(ret)));
+            }
+            let dims: Vec<usize> = vec![n, c, h, w].iter().map(|x| {*x as usize}).collect();
+            let target = output_tensor.borrow().shape();
+            if &dims != target.dims() {
+                return Err(RuntimeError::Other(format!("Mismatched shape. CUDNN expect {}x{}x{}x{}, passed {}", n, c, h, w, target)))
+            }
+
+        }
 
         use pnn_sys::{
             cudnnConvolutionFwdAlgoPerf_t,
@@ -80,17 +108,17 @@ impl ConvolutionOp {
 
         let mut algo: cudnnConvolutionFwdAlgo_t = cudnnConvolutionFwdAlgo_t_CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM;
         unsafe {
-            let mut perf_result: cudnnConvolutionFwdAlgoPerf_t = MaybeUninit::zeroed().assume_init();
-            let mut n_results: c_int = 0;
+            let perf_result: cudnnConvolutionFwdAlgoPerf_t = MaybeUninit::zeroed().assume_init();
+            let n_results: c_int = 0;
             let ret = cudnnFindConvolutionForwardAlgorithm(
                 *context.as_ref(),
-                input_tensor.as_ref().borrow_mut().desc(),
+                input_tensor.borrow_mut().desc(),
                 filter_desc,
                 conv_desc,
-                output_tensor.as_ref().borrow_mut().desc(),
+                output_tensor.borrow_mut().desc(),
                 1, // Query only fastest
-                addr_of!(n_results) as (*mut c_int),
-                addr_of!(perf_result) as (*mut cudnnConvolutionFwdAlgoPerf_t)
+                addr_of!(n_results) as *mut c_int,
+                addr_of!(perf_result) as *mut cudnnConvolutionFwdAlgoPerf_t
             );
             if ret != 0 {
                 return Err(RuntimeError::Cudnn(cudnnError::from(ret)));
@@ -100,18 +128,18 @@ impl ConvolutionOp {
             }
             algo = perf_result.algo;
         }
-        
+
         let workspace;
         unsafe {
-            let mut workspace_size: usize = 0;
+            let workspace_size: usize = 0;
             let ret = cudnnGetConvolutionForwardWorkspaceSize(
                 *context.as_ref(),
-                input_tensor.as_ref().borrow_mut().desc(),
+                input_tensor.borrow_mut().desc(),
                 filter_desc,
                 conv_desc,
-                output_tensor.as_ref().borrow_mut().desc(),
+                output_tensor.borrow_mut().desc(),
                 algo,
-                addr_of!(workspace_size) as (*mut usize)
+                addr_of!(workspace_size) as *mut usize
             );
             if ret != 0 {
                 return Err(RuntimeError::Cudnn(cudnnError::from(ret)));
@@ -119,7 +147,7 @@ impl ConvolutionOp {
             workspace = DevicePtr::new(cudnnDataType::HALF, workspace_size / 2)?;
         }
         let scales = Scale::new(&data_type, 1., 0.);
-
+        let filter_data = DevicePtr::new(data_type.clone(), input_channels * filters * size_x * size_y)?;
 
         Ok(ConvolutionOp{input_tensor, output_tensor, context, filter_desc, filter_data, conv_desc, algo, workspace, scales})
     }
@@ -147,7 +175,7 @@ impl LayerOp for ConvolutionOp {
                 self.workspace.size(),
                 self.scales.beta_ptr(),
                 y.desc(),
-                y.ptr().borrow_mut().ptr() as *mut c_void
+                y.ptr().borrow().ptr() as *mut c_void
             );
             if ret != 0 {
                 return Err(RuntimeError::Cudnn(cudnnError::from(ret)));
@@ -161,5 +189,38 @@ impl Drop for ConvolutionOp {
     fn drop(&mut self) {
         cudnnDestroyFilterDescriptor(self.filter_desc).expect("Could free filter descriptor");
         cudnnDestroyConvolutionDescriptor(self.conv_desc).expect("Could free conv descriptor");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn base_test() {
+        use crate::cudnn::*;
+        use crate::nn::LayerShape;
+
+        let dtype = cudnnDataType::FLOAT;
+        let x_data = Rc::new(RefCell::new(DevicePtr::new(dtype.clone(), 4 * 3 * 416 * 416).unwrap()));
+        let inp = Rc::new(RefCell::new(Tensor::new(Box::new(LayerShape::from_nchw(4, 3, 416, 416)), x_data.clone()).unwrap()));
+    
+        let y_data = Rc::new(RefCell::new(DevicePtr::new(dtype.clone(), 4 * 32 * 416 * 416).unwrap()));
+        let outp = Rc::new(RefCell::new(Tensor::new(Box::new(LayerShape::from_nchw(4, 32, 416, 416)), y_data.clone()).unwrap()));
+    
+        let handle = Rc::new(cudnnCreate().unwrap());
+    
+        let mut conv = ConvolutionOp::new(
+            handle,
+            inp,
+            outp,
+            &dtype,
+            32, 3,
+            3, 3,
+            1, 1,
+            1, 1
+        ).unwrap();
+    
+        conv.forward().unwrap();
     }
 }
