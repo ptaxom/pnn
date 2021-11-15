@@ -9,13 +9,19 @@ use crate::cudnn::{Tensor,
     cudnnCreateConvolutionDescriptor,
     cudnnDestroyConvolutionDescriptor,
     cudnnSetConvolution2dDescriptor,
-    DevicePtr
+    cudnnConvolutionFwdAlgo_t,
+    DevicePtr,
+    cudnnError,
+    Scale,
 };
 use crate::nn::{LayerOp, RuntimeError, InputTensor, OutputTensor};
 
 use std::{
     rc::Rc,
-    cell::RefCell
+    cell::RefCell,
+    mem::MaybeUninit,
+    ptr::addr_of,
+    os::raw::{c_void, c_int}
 };
 
 pub struct ConvolutionOp {
@@ -27,6 +33,11 @@ pub struct ConvolutionOp {
     filter_data: DevicePtr,
 
     conv_desc: cudnnConvolutionDescriptor_t,
+    algo: cudnnConvolutionFwdAlgo_t,
+    
+    workspace: DevicePtr,
+    
+    scales: Scale
 
 }
 
@@ -60,15 +71,95 @@ impl ConvolutionOp {
             RuntimeError::Cudnn(e)
         })?;
 
+        use pnn_sys::{
+            cudnnConvolutionFwdAlgoPerf_t,
+            cudnnFindConvolutionForwardAlgorithm,
+            cudnnConvolutionFwdAlgo_t_CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM,
+            cudnnGetConvolutionForwardWorkspaceSize
+        };
 
-        Ok(ConvolutionOp{input_tensor, output_tensor, context, filter_desc, filter_data, conv_desc})
+        let mut algo: cudnnConvolutionFwdAlgo_t = cudnnConvolutionFwdAlgo_t_CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM;
+        unsafe {
+            let mut perf_result: cudnnConvolutionFwdAlgoPerf_t = MaybeUninit::zeroed().assume_init();
+            let mut n_results: c_int = 0;
+            let ret = cudnnFindConvolutionForwardAlgorithm(
+                *context.as_ref(),
+                input_tensor.as_ref().borrow_mut().desc(),
+                filter_desc,
+                conv_desc,
+                output_tensor.as_ref().borrow_mut().desc(),
+                1, // Query only fastest
+                addr_of!(n_results) as (*mut c_int),
+                addr_of!(perf_result) as (*mut cudnnConvolutionFwdAlgoPerf_t)
+            );
+            if ret != 0 {
+                return Err(RuntimeError::Cudnn(cudnnError::from(ret)));
+            }
+            if n_results != 1 {
+                return Err(RuntimeError::Other(String::from("Cann't find faster CNN algorithm")))
+            }
+            algo = perf_result.algo;
+        }
+        
+        let workspace;
+        unsafe {
+            let mut workspace_size: usize = 0;
+            let ret = cudnnGetConvolutionForwardWorkspaceSize(
+                *context.as_ref(),
+                input_tensor.as_ref().borrow_mut().desc(),
+                filter_desc,
+                conv_desc,
+                output_tensor.as_ref().borrow_mut().desc(),
+                algo,
+                addr_of!(workspace_size) as (*mut usize)
+            );
+            if ret != 0 {
+                return Err(RuntimeError::Cudnn(cudnnError::from(ret)));
+            }
+            workspace = DevicePtr::new(cudnnDataType::HALF, workspace_size / 2)?;
+        }
+        let scales = Scale::new(&data_type, 1., 0.);
+
+
+        Ok(ConvolutionOp{input_tensor, output_tensor, context, filter_desc, filter_data, conv_desc, algo, workspace, scales})
     }
 }
 
 impl LayerOp for ConvolutionOp {
     
     fn forward(&mut self) -> Result<(), RuntimeError> {
+        use pnn_sys::{
+            cudnnConvolutionForward
+        };
+        unsafe {
+            let mut x = self.input_tensor.borrow_mut();
+            let mut y = self.output_tensor.borrow_mut();
+            let ret = cudnnConvolutionForward(
+                *self.context.as_ref(),
+                self.scales.alpha_ptr(),
+                x.desc(),
+                x.ptr().borrow().ptr(),
+                self.filter_desc,
+                self.filter_data.ptr(),
+                self.conv_desc,
+                self.algo,
+                self.workspace.ptr() as *mut c_void,
+                self.workspace.size(),
+                self.scales.beta_ptr(),
+                y.desc(),
+                y.ptr().borrow_mut().ptr() as *mut c_void
+            );
+            if ret != 0 {
+                return Err(RuntimeError::Cudnn(cudnnError::from(ret)));
+            }
+        }
         Ok(())
     }
+}
 
+impl Drop for ConvolutionOp {
+    fn drop(&mut self) {
+        cudnnDestroyFilterDescriptor(self.filter_desc).expect("Could free filter descriptor");
+        cudnnDestroyConvolutionDescriptor(self.conv_desc).expect("Could free conv descriptor");
+    }
 }

@@ -1,6 +1,6 @@
 use crate::cudnn::{cudnnDataType, cudaMallocHost, cudaFree, cudaMemcpy, cudaMemcpyKind};
 use crate::nn::RuntimeError;
-use std::{os::raw::c_void, fmt, error::Error};
+use std::{os::raw::c_void};
 
 pub struct DevicePtr {
     // Pointer to device memory

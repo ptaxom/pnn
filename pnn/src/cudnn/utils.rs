@@ -658,7 +658,7 @@ pub fn cudnnAddTensor(
 }
 
 
-pub use pnn_sys::{cudnnFilterDescriptor_t, cudnnConvolutionDescriptor_t};
+pub use pnn_sys::{cudnnFilterDescriptor_t, cudnnConvolutionDescriptor_t, cudnnConvolutionFwdAlgo_t};
 
 pub fn cudnnCreateFilterDescriptor() -> Result<cudnnFilterDescriptor_t, cudnnError> {
     use pnn_sys::cudnnCreateFilterDescriptor;

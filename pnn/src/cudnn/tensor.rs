@@ -42,6 +42,14 @@ impl Tensor {
         self.ptr.as_ref().borrow_mut().load(other)?;
         Ok(())
     }
+
+    pub fn desc(&mut self) -> cudnnTensorDescriptor_t {
+        self.tensor_desc
+    }
+
+    pub fn ptr(&mut self) -> Rc<RefCell<DevicePtr>> {
+        self.ptr.clone()
+    }
 }
 
 impl Drop for Tensor {
