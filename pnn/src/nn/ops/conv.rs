@@ -160,13 +160,18 @@ impl LayerOp for ConvolutionOp {
             cudnnConvolutionForward
         };
         unsafe {
-            let mut x = self.input_tensor.borrow_mut();
+            let x_desc;
+            let x_ptr;
+            {   // Allow inplace operations for layer
+                x_desc = self.input_tensor.borrow_mut().desc();
+                x_ptr = self.input_tensor.borrow_mut().ptr().borrow().ptr();
+            }
             let mut y = self.output_tensor.borrow_mut();
             let ret = cudnnConvolutionForward(
                 *self.context.as_ref(),
                 self.scales.alpha_ptr(),
-                x.desc(),
-                x.ptr().borrow().ptr(),
+                x_desc,
+                x_ptr,
                 self.filter_desc,
                 self.filter_data.ptr(),
                 self.conv_desc,

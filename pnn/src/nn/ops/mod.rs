@@ -13,5 +13,7 @@ pub trait LayerOp {
 }
 
 mod conv;
+mod batchnorm;
 
 pub use conv::*;
+pub use batchnorm::*;
