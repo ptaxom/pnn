@@ -50,7 +50,7 @@ pub struct LayerShape {
 impl LayerShape {
     pub fn new(dims: Vec<usize>) -> Self{
         assert!(dims.len() > 1 && dims.len() < 5);
-        Self{dims, _size:1}
+        Self{dims, _size:1} // TODO: Fix it
     }
 
     pub fn from_nc(n: usize, c: usize) -> Self {

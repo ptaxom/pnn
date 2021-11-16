@@ -1,8 +1,15 @@
 #include "kernels.h"
 
-size_t get_number_of_blocks(size_t elements) {
-    return (elements + BLOCK_SIZE - 1) / BLOCK_SIZE;
-} 
+// #TODO: Add more accurate estimation
+dim3 get_gridsize(size_t elements){
+    unsigned int required_blocks = (elements + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    if(required_blocks <= 65535){
+        return {required_blocks, 1, 1};
+    }
+    unsigned int proposed_width = ceil(sqrt(required_blocks));
+    unsigned int required_height = (required_blocks - proposed_width + 1) / proposed_width;
+    return {proposed_width, required_height, 1};
+}
 
 template<typename T>
 __device__ T mish(T x) {
@@ -45,7 +52,7 @@ __global__ void activation_mish_kernel(T* data, int elements) {
 
 template<typename T>
 cudaError_t activation_mish(void* data, size_t elements, cudaStream_t stream) {
-    activation_mish_kernel<T><<<BLOCK_SIZE, get_number_of_blocks(elements), 0, stream >>>(
+    activation_mish_kernel<T><<<get_gridsize(elements), BLOCK_SIZE, 0, stream >>>(
         static_cast<T*>(data), 
         static_cast<int>(elements)
     );

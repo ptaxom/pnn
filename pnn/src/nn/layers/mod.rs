@@ -68,7 +68,7 @@ impl From<&String> for LayerType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ActivationType {
     Linear,
     Mish,

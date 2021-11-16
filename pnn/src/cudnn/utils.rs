@@ -775,3 +775,19 @@ pub fn cudnnSetConvolution2dDescriptor(
         }
     }
 }
+
+pub use pnn_sys::{cudaStream_t};
+
+pub fn cudnnGetStream(handle: cudnnHandle_t) -> Result<cudaStream_t, cudnnError> {
+    use pnn_sys::cudnnGetStream;
+    use std:: mem::MaybeUninit;
+
+    unsafe {
+        let mut streamId: cudaStream_t = MaybeUninit::zeroed().assume_init();
+        let res = cudnnGetStream(handle, std::ptr::addr_of!(streamId) as *mut cudaStream_t);
+        match  res{
+            0 => Ok(streamId),
+            x => Err(cudnnError::from(x))
+        }
+    }
+}
