@@ -3,11 +3,12 @@ use std::{
     self,
     any::Any,
     sync::atomic::{Ordering},
-    rc::Rc
+    rc::Rc,
+    convert::TryFrom
 };
 
 use crate::nn::shape::*;
-use crate::nn::{Layer, LayerType, errors::*};
+use crate::nn::{Layer, LayerType, errors::*, ActivationType};
 use crate::parsers::{DeserializationError, parse_numerical_field};
 
 
@@ -31,7 +32,7 @@ pub struct ConvolutionalLayer {
     // Paddings size
     padding: usize,
     // Activation. #TODO: add support of activation :)
-    activation: String
+    activation: ActivationType
 }
 
 const SUPPORTED_FIELDS: [&str; 7] = [
@@ -109,7 +110,7 @@ impl Layer for ConvolutionalLayer {
         let pad = parse_numerical_field::<usize>(&config, "pad", false, Some(0))?.unwrap() != 0;
         let default_padding = if pad {size / 2} else {0};
         let padding = parse_numerical_field::<usize>(&config, "padding", false, Some(default_padding))?.unwrap();
-        let activation: String = config.get("activation").unwrap_or(&String::from("linear")).to_string();
+        let activation = ActivationType::try_from(&config.get("activation").unwrap_or(&String::from("linear")).to_string())?;
         
         let _ = config.keys().filter(|k| {
             !SUPPORTED_FIELDS.contains(&&k[..])
@@ -150,7 +151,7 @@ mod tests {
         assert_eq!(conv_layer.stride, 1);
         assert_eq!(conv_layer.pad, false);
         assert_eq!(conv_layer.padding, 0);
-        assert_eq!(conv_layer.activation, "linear");
+        assert_eq!(conv_layer.activation, ActivationType::Linear);
     }
 
     #[test]
@@ -158,6 +159,7 @@ mod tests {
         let mut config = generate_config();
         config.insert(String::from("pad"), String::from("1"));
         config.insert(String::from("size"), String::from("5"));
+        config.insert(String::from("activation"), String::from("mish"));
 
         let layer = ConvolutionalLayer::from_config(config).unwrap();
         let conv_layer = layer.as_any().downcast_ref::<ConvolutionalLayer>().unwrap();
@@ -167,7 +169,7 @@ mod tests {
         assert_eq!(conv_layer.stride, 1);
         assert_eq!(conv_layer.pad, true);
         assert_eq!(conv_layer.padding, 2);
-        assert_eq!(conv_layer.activation, "linear");
+        assert_eq!(conv_layer.activation, ActivationType::Mish);
     }
 
     #[test]
