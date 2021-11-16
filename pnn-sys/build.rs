@@ -1,4 +1,5 @@
 use bindgen::Builder;
+use cc::Build;
 
 fn main() {
     println!("cargo:rustc-link-lib=cuda");
@@ -16,4 +17,12 @@ fn main() {
 
     bindings.write_to_file("./src/bindings.rs")
         .expect("Couldn't write bindings!");
+
+    Build::new()
+        .cuda(true)
+        .flag("-cudart=shared")
+        .flag("--use_fast_math")
+        .flag("-arch=sm_87") // TODO: Add autodiscovery
+        .files(&["./cuda/mish.cu"])
+        .compile("kernels.a")
 }

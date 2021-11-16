@@ -5,3 +5,4 @@
 #![allow(improper_ctypes)]
 
 include!("./bindings.rs");
+include!("./cuda.rs");
