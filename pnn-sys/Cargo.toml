@@ -1,0 +1,15 @@
+[package]
+name = "pnn-sys"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[build]
+# rustflags = ["-Awarnings"]
+
+[dependencies]
+libc = "0.*"
+
+[build-dependencies]
+bindgen = "0.53.1"
+cc = "1.0"
