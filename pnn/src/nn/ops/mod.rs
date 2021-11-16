@@ -15,7 +15,9 @@ pub trait LayerOp {
 mod conv;
 mod batchnorm;
 mod activation;
+mod pooling;
 
 pub use conv::*;
 pub use batchnorm::*;
 pub use activation::*;
+pub use pooling::*;

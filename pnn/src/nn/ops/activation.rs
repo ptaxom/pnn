@@ -10,8 +10,6 @@ use crate::cudnn::{Tensor,
 };
 use crate::nn::{LayerOp, RuntimeError, InputTensor, OutputTensor, ActivationType};
 
-const EPSILON: f64 = 0.00001;
-
 use std::{
     rc::Rc,
     cell::RefCell,
