@@ -6,6 +6,7 @@ use std::{
 };
 use crate::parsers::*;
 use crate::nn::errors::*;
+use crate::cudnn::{cudnnHandle_t, cudnnCreate, cudnnDataType};
 
 pub type LayerRef = Rc<RefCell<Box<dyn Layer>>>;
 
@@ -22,7 +23,9 @@ pub struct Network {
     // Layer connectivity graph
     adjency_matrix: Vec<Vec<Link>>,
     // Batchsize
-    batchsize: Option<usize>
+    batchsize: Option<usize>,
+    // cudnn context
+    context: Option<Rc<cudnnHandle_t>>
 }
 
 impl Network {
@@ -143,8 +146,9 @@ impl Network {
             let mut row: Vec<Link> = Vec::new();
             row.resize(n_layers, Link::None);
         }
-        let batchsize: Option<usize> = None;
-        let mut net = Network{layers, adjency_matrix, batchsize};
+        let batchsize = None;
+        let context = None;
+        let mut net = Network{layers, adjency_matrix, batchsize, context};
         net.build_adjency_matrix()?;
         Ok(net)
     }
@@ -199,12 +203,12 @@ impl Network {
 
     pub fn set_batchsize(&mut self, batch: usize) -> Result<(), BuildError> {
         if let Some(_) = self.batchsize {
-            return Err(BuildError::Rebuild)
+            return Err(BuildError::Rebuild(String::from("Batchsize already setted")))
         }
         self.batchsize = Some(batch);
 
         {
-            let mut first_layer_ref = self.layers[0].as_ref().borrow_mut();
+            let mut first_layer_ref = self.layers[0].borrow_mut();
             let input_l = first_layer_ref.as_any_mut().downcast_mut::<InputLayer>().unwrap();
             input_l.set_batchsize(batch);
         }
@@ -213,17 +217,55 @@ impl Network {
             let mut shapes = Vec::new();
             for (col, link) in self.adjency_matrix[i].iter().enumerate() {
                 if *link == Link::Backward {
-                    let shape = self.layers[col].as_ref().borrow().shape().unwrap();
+                    let shape = self.layers[col].borrow().shape().unwrap();
                     shapes.push(shape);
                 }
             }
-            self.layers[i].as_ref().borrow_mut().infer_shape(shapes).map_err(|x| {
+            self.layers[i].borrow_mut().infer_shape(shapes).map_err(|x| {
                 BuildError::DimInferError(x)
             })?;
         }
         Ok(())
     }
+    
+    pub fn build(&mut self, data_type: cudnnDataType) -> Result<(), BuildError> {
+        if self.batchsize == None {
+            return Err(BuildError::Runtime(RuntimeError::Other(String::from("Batchsize is not setted"))))
+        }
+        if let Some(_) = self.context {
+            return Err(BuildError::Rebuild(String::from("Already builded")))
+        }
+
+        let context = Rc::new(cudnnCreate().map_err(|e| {
+            BuildError::Runtime(RuntimeError::Cudnn(e))
+        })?);
+
+        self.context = Some(context.clone());
+
+        {   // Allocate tensors for first layer
+            let mut first_layer = self.layers[0].borrow_mut();
+            let info = Vec::new();
+            first_layer.build(context.clone(), data_type.clone(), info, true)?;
+        }
+
+        for i in 1..self.layers.len() {
+            let has_depend_layers = self.adjency_matrix[i].iter().filter(|l| {
+                l == &&Link::Forward
+            }).count() > 1;
+            let mut build_info = Vec::new();
+            for (col, link) in self.adjency_matrix[i].iter().enumerate() {
+                if *link == Link::Backward {
+                    let info = self.layers[col].as_ref().borrow().get_build_information();
+                    build_info.insert(0, info);
+                }
+            }
+            self.layers[i].borrow_mut().build(context.clone(), data_type.clone(), build_info, has_depend_layers)?;
+        }
+
+        Ok(())
+    }
 }
+
 
 #[cfg(test)]
 mod tests {

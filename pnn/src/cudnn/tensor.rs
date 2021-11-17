@@ -48,7 +48,7 @@ impl Tensor {
         Ok(())
     }
 
-    pub fn desc(&mut self) -> cudnnTensorDescriptor_t {
+    pub fn desc(&self) -> cudnnTensorDescriptor_t {
         self.tensor_desc
     }
 

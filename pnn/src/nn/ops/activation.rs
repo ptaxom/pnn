@@ -68,7 +68,6 @@ impl ActivationOp {
         let mut cudnn_act_desc = None;
 
         if activation == ActivationType::Mish {
-            println!("MISH");
             cuda_func = Some(match data_type {
                 cudnnDataType::HALF => safe_mish_fp16,
                 cudnnDataType::FLOAT => safe_mish_fp32,
@@ -79,7 +78,6 @@ impl ActivationOp {
                 RuntimeError::Cudnn(e)
             })?);
         } else if activation == ActivationType::Logistic {
-            println!("Logistic");
             unsafe {
                 let mut act_desc: cudnnActivationDescriptor_t = std::ptr::null_mut() as cudnnActivationDescriptor_t;
                 let res = pnn_sys::cudnnCreateActivationDescriptor(&mut act_desc as *mut cudnnActivationDescriptor_t);
