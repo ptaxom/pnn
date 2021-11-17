@@ -18,6 +18,7 @@ use std::{
 use pnn_sys::{cudaError_t, cudnnActivationDescriptor_t};
 type ExternCudaCall = fn(*mut c_void, usize, cudaStream_t) -> cudaError_t;
 
+#[derive(Debug)]
 pub struct ActivationOp {
     tensor: OutputTensor,
     context: Rc<cudnnHandle_t>,

@@ -21,6 +21,7 @@ use std::{
     os::raw::{c_void, c_int}
 };
 
+#[derive(Debug)]
 pub struct BatchnormOp {
     input_tensor: InputTensor,
     output_tensor: OutputTensor,

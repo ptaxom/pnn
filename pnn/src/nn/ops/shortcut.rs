@@ -13,6 +13,7 @@ use std::{
     os::raw::{c_void}
 };
 
+#[derive(Debug)]
 pub struct ShortcutOp {
     input_tensors: Vec<InputTensor>,
     output_tensor: OutputTensor,

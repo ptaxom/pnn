@@ -3,12 +3,13 @@ use std::{
 };
 use crate::cudnn::cudnnDataType;
 
-// #TODO: implement it with Box<T>
+#[derive(Debug)]
 enum ScalePair {
     Single((Box<f32>, Box<f32>)),
     Double((Box<f64>, Box<f64>)),
 }
 
+#[derive(Debug)]
 pub struct Scale{
     data: ScalePair
 }

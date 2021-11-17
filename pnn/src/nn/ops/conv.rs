@@ -24,6 +24,7 @@ use std::{
     os::raw::{c_void, c_int}
 };
 
+#[derive(Debug)]
 pub struct ConvolutionOp {
     input_tensor: InputTensor,
     output_tensor: OutputTensor,

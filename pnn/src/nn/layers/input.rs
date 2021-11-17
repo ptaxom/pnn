@@ -83,7 +83,7 @@ impl Layer for InputLayer {
         BuildInformation{tensor: self.tensor.unwrap().clone(), reusable: self.reusable}
     }
 
-    fn get_operations(&mut self) -> &Vec<&mut dyn LayerOp> {
+    fn get_operations(&mut self) -> &Vec<Box<dyn LayerOp>> {
         vec![]
     }
 

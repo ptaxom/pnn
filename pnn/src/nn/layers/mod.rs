@@ -46,7 +46,7 @@ pub trait Layer {
 
     fn get_build_information(&self) -> BuildInformation;
 
-    fn get_operations(&mut self) -> &Vec<&mut dyn LayerOp>;
+    fn get_operations(&mut self) -> &Vec<Box<dyn LayerOp>>;
 
     fn forward(&mut self) -> Result<(), RuntimeError> {
         for op in self.get_operations() {
