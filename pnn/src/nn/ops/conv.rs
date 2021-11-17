@@ -75,6 +75,13 @@ impl ConvolutionOp {
             RuntimeError::Cudnn(e)
         })?;
 
+        // unsafe {
+        //     let res = pnn_sys::cudnnSetConvolutionMathType(conv_desc, pnn_sys::cudnnMathType_t_CUDNN_TENSOR_OP_MATH);
+        //     if res != 0 {
+        //         return Err(RuntimeError::Cudnn(cudnnError::from(res)));
+        //     }
+        // }
+
         unsafe {
             let n: c_int = 0;
             let c: c_int = 0;

@@ -5,7 +5,7 @@ use std::thread::sleep;
 
 fn main() {
     let mut net = Network::from_darknet(String::from("./cfgs/tests/yolov4-csp.cfg")).unwrap();
-    let bs = 4;
+    let bs = 1;
     net.set_batchsize(bs).unwrap();
     net.build(cudnnDataType::FLOAT).unwrap();
     println!("Builded yolo");
