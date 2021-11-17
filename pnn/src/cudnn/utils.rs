@@ -570,6 +570,22 @@ pub enum cudnnDataType {
     INT64 = 10
 }
 
+pub fn cudnnSizeOf(dtype: &cudnnDataType) -> usize {
+    match *dtype {
+        cudnnDataType::FLOAT => 4,
+        cudnnDataType::DOUBLE => 8,
+        cudnnDataType::HALF => 2,
+        cudnnDataType::INT8 => 1,
+        cudnnDataType::INT32 => 4,
+        cudnnDataType::INT8x4 => 4,
+        cudnnDataType::UINT8 => 1,
+        cudnnDataType::UINT8x4 => 4,
+        cudnnDataType::INT8x32 => 32,
+        cudnnDataType::BFLOAT16 => 2,
+        cudnnDataType::INT64 => 8
+    }
+}
+
 pub fn cudnnSetTensor4dDescriptor(
     tensorDesc: cudnnTensorDescriptor_t,
     data_type: cudnnDataType,
@@ -788,6 +804,22 @@ pub fn cudnnGetStream(handle: cudnnHandle_t) -> Result<cudaStream_t, cudnnError>
         match  res{
             0 => Ok(streamId),
             x => Err(cudnnError::from(x))
+        }
+    }
+}
+
+pub fn cudaMemcpyAsync(
+    dst: *mut c_void,
+    src: *const c_void,
+    count: usize,
+    kind: cudaMemcpyKind,
+    stream: cudaStream_t
+) -> Result<(), cudaError> {
+    unsafe {
+        let res = pnn_sys::cudaMemcpyAsync(dst, src, count, kind as u32, stream);
+        match  res{
+            0 => Ok(()),
+            x => Err(cudaError::from(x))
         }
     }
 }

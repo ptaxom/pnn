@@ -74,7 +74,9 @@ impl ActivationOp {
                 cudnnDataType::DOUBLE => safe_mish_fp64,
                 _ => return Err(RuntimeError::Other(String::from("Unsupported data type for Mish activation")))
             });
-            stream = Some(cudnnGetStream(*context.as_ref()).unwrap());
+            stream = Some(cudnnGetStream(*context.as_ref()).map_err(|e| {
+                RuntimeError::Cudnn(e)
+            })?);
         } else if activation == ActivationType::Logistic {
             println!("Logistic");
             unsafe {

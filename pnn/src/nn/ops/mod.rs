@@ -16,8 +16,10 @@ mod conv;
 mod batchnorm;
 mod activation;
 mod pooling;
+mod route;
 
 pub use conv::*;
 pub use batchnorm::*;
 pub use activation::*;
 pub use pooling::*;
+pub use route::*;
