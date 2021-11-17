@@ -10,13 +10,6 @@ use crate::cudnn::{Tensor,
     cudnnSizeOf
 };
 use crate::nn::{LayerOp, RuntimeError, InputTensor, OutputTensor};
-use pnn_sys::{
-    cudnnPoolingDescriptor_t,
-    cudnnSetPooling2dDescriptor,
-    cudnnGetPooling2dForwardOutputDim,
-    cudnnDestroyPoolingDescriptor,
-    cudnnPoolingForward,
-};
 
 
 use std::{
