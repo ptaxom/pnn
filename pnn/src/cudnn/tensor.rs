@@ -53,6 +53,10 @@ impl Tensor {
     pub fn shape(&self) -> Box<dyn Shape> {
         Box::new(LayerShape::new(self.shape.dims().clone()))
     }
+
+    pub fn data_type(&self) -> cudnnDataType {
+        self.ptr.borrow().data_type()
+    }
 }
 
 impl Drop for Tensor {

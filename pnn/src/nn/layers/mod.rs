@@ -40,7 +40,7 @@ pub enum LayerType {
     Convolutional,
     Maxpool,
     Route,
-    YoloLayer,
+    Yolo,
     Shortcut,
     Upsample,
     Unknown
@@ -60,7 +60,7 @@ impl From<&String> for LayerType {
         } else if layer_type == "upsample" {
             return LayerType::Upsample
         } else if layer_type == "yolo" {
-            return LayerType::YoloLayer
+            return LayerType::Yolo
         } else if layer_type == "shortcut" {
             return LayerType::Shortcut
         }
@@ -68,6 +68,29 @@ impl From<&String> for LayerType {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum ActivationType {
+    Linear,
+    Mish,
+    Logistic
+}
+
+
+impl std::convert::TryFrom<&String> for ActivationType {
+    type Error = DeserializationError;
+    fn try_from(layer_type: &String) -> Result<Self, Self::Error> {
+
+        if layer_type == "linear" {
+            return Ok(ActivationType::Linear)
+        } else if layer_type == "mish" {
+            return Ok(ActivationType::Mish)
+        } else if layer_type == "logistic" {
+            return Ok(ActivationType::Logistic)
+        }
+
+        Err(DeserializationError(format!("Couldnt parse activation from {}", layer_type)))
+    }
+}
 
 
 mod input;

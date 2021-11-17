@@ -36,7 +36,7 @@ impl Network {
             LayerType::Shortcut => ShortcutLayer::from_config(config),
             LayerType::Upsample => UpsampleLayer::from_config(config),
             LayerType::Route => RouteLayer::from_config(config),
-            LayerType::YoloLayer => YoloLayer::from_config(config),
+            LayerType::Yolo => YoloLayer::from_config(config),
             LayerType::Maxpool => MaxpoolLayer::from_config(config),            
             LayerType::Unknown => return Err(
                 DeserializationError(format!("Couldnt deserialize config for '{}'", key))
@@ -92,7 +92,7 @@ impl Network {
                     self.link_layer(layer_pos)?;
                 }
             }
-            LayerType::YoloLayer => (),
+            LayerType::Yolo => (),
             _ => {
                 self.link_layer(layer_pos)?;
             }

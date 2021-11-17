@@ -43,6 +43,10 @@ impl DevicePtr {
         self.data_type.clone()
     }
 
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
     pub fn load<T>(&mut self, other: &Vec<T>) -> Result<(), RuntimeError> {
         if self.size != other.len() {
             return Err(RuntimeError::Other(String::from("Couldnt load from vector with different size")))

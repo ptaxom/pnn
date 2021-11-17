@@ -89,7 +89,7 @@ impl Layer for YoloLayer {
     }
 
     fn layer_type(&self) -> LayerType {
-        LayerType::YoloLayer
+        LayerType::Yolo
     }
 
 }
@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn test_layer_type() {
         let layer = YoloLayer::from_config(generate_config()).unwrap();
-        assert_eq!(layer.layer_type(), LayerType::YoloLayer);
+        assert_eq!(layer.layer_type(), LayerType::Yolo);
     }
 
 }

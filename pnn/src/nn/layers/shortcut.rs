@@ -3,11 +3,12 @@ use std::{
     self,
     any::Any,
     sync::atomic::{Ordering},
-    rc::Rc
+    rc::Rc,
+    convert::TryFrom
 };
 
 use crate::nn::shape::*;
-use crate::nn::{Layer, LayerType, errors::*};
+use crate::nn::{Layer, LayerType, errors::*, ActivationType};
 use crate::parsers::{DeserializationError, parse_list_field};
 
 
@@ -21,7 +22,7 @@ pub struct ShortcutLayer {
     // Offsets to previous layers
     from: Vec<i32>,
     // Activation function
-    activation: String
+    activation: ActivationType
 }
 
 const SUPPORTED_FIELDS: [&str; 2] = [
@@ -71,7 +72,7 @@ impl Layer for ShortcutLayer {
         let shape = None;
         let from = parse_list_field::<i32>(&config, "from", "ShortcutLayer")?;
 
-        let activation: String = config.get("activation").unwrap_or(&String::from("linear")).to_string();
+        let activation = ActivationType::try_from(&config.get("activation").unwrap_or(&String::from("linear")).to_string())?;
         
         let _ = config.keys().filter(|k| {
             !SUPPORTED_FIELDS.contains(&&k[..])
@@ -124,7 +125,7 @@ mod tests {
         let layer = ShortcutLayer::from_config(generate_config()).unwrap();
         let layer = layer.as_any().downcast_ref::<ShortcutLayer>().unwrap();
         assert_eq!(layer.from, [-4]);
-        assert_eq!(layer.activation, "linear");
+        assert_eq!(layer.activation, ActivationType::Linear);
     }
 
     #[test]
@@ -134,7 +135,7 @@ mod tests {
         let layer = ShortcutLayer::from_config(config).unwrap();
         let layer = layer.as_any().downcast_ref::<ShortcutLayer>().unwrap();
         assert_eq!(layer.from, [-4, -5, -6]);
-        assert_eq!(layer.activation, "linear");
+        assert_eq!(layer.activation, ActivationType::Linear);
     }
 
     #[test]

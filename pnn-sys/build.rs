@@ -22,7 +22,7 @@ fn main() {
         .cuda(true)
         .flag("-cudart=shared")
         .flag("--use_fast_math")
-        .flag("-arch=sm_87") // TODO: Add autodiscovery
-        .files(&["./cuda/mish.cu"])
+        .flag("-arch=sm_80") // TODO: Add autodiscovery
+        .files(&["./cuda/mish.cu", "./cuda/upsample.cu", "./cuda/utils.cpp"])
         .compile("kernels.a")
 }

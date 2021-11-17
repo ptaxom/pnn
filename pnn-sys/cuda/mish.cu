@@ -1,9 +1,5 @@
 #include "kernels.h"
 
-size_t get_number_of_blocks(size_t elements) {
-    return (elements + BLOCK_SIZE - 1) / BLOCK_SIZE;
-} 
-
 template<typename T>
 __device__ T mish(T x) {
     T e = exp(x);
@@ -33,8 +29,6 @@ __device__ float mish(float x) {
     return x - 2 * __fdividef(x, n + 2);
 }
 
-
-
 template<typename T>
 __global__ void activation_mish_kernel(T* data, int elements) {
     int i = (blockIdx.x + blockIdx.y*gridDim.x) * blockDim.x + threadIdx.x;
@@ -45,7 +39,7 @@ __global__ void activation_mish_kernel(T* data, int elements) {
 
 template<typename T>
 cudaError_t activation_mish(void* data, size_t elements, cudaStream_t stream) {
-    activation_mish_kernel<T><<<BLOCK_SIZE, get_number_of_blocks(elements), 0, stream >>>(
+    activation_mish_kernel<T><<<get_gridsize(elements), BLOCK_SIZE, 0, stream >>>(
         static_cast<T*>(data), 
         static_cast<int>(elements)
     );
