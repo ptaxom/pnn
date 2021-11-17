@@ -21,7 +21,6 @@ use std::{
 pub struct RouteOp {
     input_tensors: Vec<InputTensor>,
     output_tensor: OutputTensor,
-    context: Rc<cudnnHandle_t>,
     b: usize,
     channel_size: usize,
     stream: cudaStream_t
@@ -43,7 +42,7 @@ impl RouteOp {
         let channel_size = cudnnSizeOf(&output_tensor.borrow().data_type()) * shape.H().unwrap() * shape.W().unwrap();
 
         Ok(RouteOp{input_tensors, output_tensor,
-            context, stream, channel_size, b})
+            stream, channel_size, b})
     }
 }
 
