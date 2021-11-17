@@ -7,8 +7,10 @@ use std::{os::raw::c_void,
 };
 use pnn_sys::{cudnnTensorDescriptor_t};
 use crate::cudnn::*;
+use crate::nn::RuntimeError;
 
 //Container to store device ptr and tensor information in conjunction 
+#[derive(Debug)]
 pub struct Tensor {
     // Shape of tensor in pnn type
     shape: Box<dyn Shape>,
@@ -19,9 +21,11 @@ pub struct Tensor {
 }
 
 impl Tensor {
-    pub fn new(shape: Box<dyn Shape>, ptr: Rc<RefCell<DevicePtr>>) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(shape: Box<dyn Shape>, ptr: Rc<RefCell<DevicePtr>>) -> Result<Self, RuntimeError> {
         // allocate CUDA memory at GPU
-        let tensor_desc = cudnnCreateTensorDescriptor()?;
+        let tensor_desc = cudnnCreateTensorDescriptor().map_err(|e| {
+            RuntimeError::Cudnn(e)
+        })?;
         cudnnSetTensor4dDescriptor(
             tensor_desc,
             ptr.borrow().data_type(),
@@ -29,14 +33,16 @@ impl Tensor {
             shape.C(),
             shape.H().unwrap_or(1),
             shape.W().unwrap_or(1)
-        )?;
+        ).map_err(|e| {
+            RuntimeError::Cudnn(e)
+        })?;
         Ok(Self{shape, tensor_desc, ptr})
     }
 
-    pub fn load<T>(&mut self, other: &Vec<T>) -> Result<(), Box<dyn Error>> {
+    pub fn load<T>(&mut self, other: &Vec<T>) -> Result<(), RuntimeError> {
         // #TODO: copy host -> host, and then host -> device. rework
         if self.shape.size() != other.len() {
-            return Err(Box::new(ShapeError(String::from("Couldnt load from array with wrong size"))))
+            return Err(RuntimeError::Other(String::from("Couldnt load from array with wrong size")))
         }
         self.ptr.as_ref().borrow_mut().load(other)?;
         Ok(())

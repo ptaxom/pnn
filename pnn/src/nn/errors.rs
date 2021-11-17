@@ -7,6 +7,7 @@ use crate::cudnn::{cudaError, cudnnError};
 #[derive(Debug)]
 pub enum BuildError {
     DimInferError(ShapeError),
+    Runtime(RuntimeError),
     Rebuild,
 }
 
