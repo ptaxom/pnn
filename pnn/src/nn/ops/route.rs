@@ -18,6 +18,7 @@ use std::{
     os::raw::{c_void}
 };
 
+#[derive(Debug)]
 pub struct RouteOp {
     input_tensors: Vec<InputTensor>,
     output_tensor: OutputTensor,

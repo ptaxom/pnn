@@ -34,7 +34,7 @@ pub struct ConvolutionalLayer {
     pad: bool,
     // Paddings size
     padding: usize,
-    // Activation. #TODO: add support of activation :)
+    // Activation
     activation: ActivationType,
     // List of operations
     operations: Vec<Box<dyn LayerOp>>,
@@ -146,11 +146,11 @@ impl Layer for ConvolutionalLayer {
     }
 
     fn get_build_information(&self) -> BuildInformation {
-        BuildInformation{tensor: self.tensor.unwrap().clone(), reusable: self.reusable}
+        BuildInformation{tensor: self.tensor.as_ref().unwrap().clone(), reusable: self.reusable}
     }
 
-    fn get_operations(&mut self) -> &Vec<Box<dyn LayerOp>> {
-        &self.operations
+    fn get_operations(&mut self) -> &mut Vec<Box<dyn LayerOp>> {
+        &mut self.operations
     }
 
     fn build(&mut self, 
@@ -162,16 +162,16 @@ impl Layer for ConvolutionalLayer {
         self.reusable = !has_depend_layers;
 
         let shape = self.shape().unwrap();
-        let input_tensor = info[0].tensor;
+        let input_tensor = info[0].tensor.clone();
         if shape.as_ref().dims() == input_tensor.borrow().shape().dims() && info[0].reusable {
-            self.tensor = Some(input_tensor)
+            self.tensor = Some(input_tensor.clone())
         } else {
             let ptr = Rc::new(RefCell::new(
                 DevicePtr::new(data_type.clone(), shape.size()).map_err(|e| {
                     BuildError::Runtime(e)
                 })?
             ));
-            let tensor_shape: Box<dyn Shape> = Box::new(LayerShape::new(*shape.dims()));
+            let tensor_shape: Box<dyn Shape> = Box::new(LayerShape::new(shape.dims()));
             let tensor = Rc::new(RefCell::new(
                 Tensor::new(tensor_shape, ptr).map_err(|e| {
                     BuildError::Runtime(e)
@@ -180,11 +180,13 @@ impl Layer for ConvolutionalLayer {
 
             self.tensor = Some(tensor);
         }
-        let t = self.tensor.unwrap();
-        
+        let t = self.tensor.as_ref().unwrap();
+
         self.operations.push(
             Box::new(ConvolutionOp::new(
-                context.clone(), input_tensor.clone(), t.clone(),
+                context.clone(),
+                input_tensor.clone(),
+                t.clone(),
                 &data_type, 
                 self.filters,
                 input_tensor.borrow().shape().C(),
@@ -199,7 +201,9 @@ impl Layer for ConvolutionalLayer {
         if self.batch_normalize {
             self.operations.push(
                 Box::new(BatchnormOp::new(
-                    context.clone(), t.clone(), t.clone(),
+                    context.clone(),
+                    t.clone(),
+                    t.clone(),
                     &data_type, 
                     self.filters
                 ).map_err(|e| {
@@ -220,7 +224,6 @@ impl Layer for ConvolutionalLayer {
         );
         Ok(())
     }
-
 }
 
 

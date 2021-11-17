@@ -799,7 +799,7 @@ pub fn cudnnGetStream(handle: cudnnHandle_t) -> Result<cudaStream_t, cudnnError>
     use std:: mem::MaybeUninit;
 
     unsafe {
-        let mut streamId: cudaStream_t = MaybeUninit::zeroed().assume_init();
+        let streamId: cudaStream_t = MaybeUninit::zeroed().assume_init();
         let res = cudnnGetStream(handle, std::ptr::addr_of!(streamId) as *mut cudaStream_t);
         match  res{
             0 => Ok(streamId),

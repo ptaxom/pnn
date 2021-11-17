@@ -94,7 +94,7 @@ impl ConvolutionOp {
             }
             let dims: Vec<usize> = vec![n, c, h, w].iter().map(|x| {*x as usize}).collect();
             let target = output_tensor.borrow().shape();
-            if &dims != target.dims() {
+            if dims != target.dims() {
                 return Err(RuntimeError::Other(format!("Mismatched shape. CUDNN expect {}x{}x{}x{}, passed {}", n, c, h, w, target)))
             }
 

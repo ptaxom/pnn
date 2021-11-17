@@ -25,7 +25,8 @@ pub struct InputLayer {
     dims: Vec<usize>,
 
     tensor: Option<OutputTensor>,
-    reusable: bool
+    reusable: bool,
+    operations: Vec<Box<dyn LayerOp>>,
 }
 
 
@@ -72,7 +73,9 @@ impl Layer for InputLayer {
         }
         let tensor = None;
         let reusable = false;
-        Ok(Box::new(InputLayer{name, shape, dims, tensor, reusable}))
+        let operations = vec![];
+
+        Ok(Box::new(InputLayer{name, shape, dims, tensor, reusable, operations}))
     }
 
     fn layer_type(&self) -> LayerType {
@@ -80,11 +83,11 @@ impl Layer for InputLayer {
     }
 
     fn get_build_information(&self) -> BuildInformation {
-        BuildInformation{tensor: self.tensor.unwrap().clone(), reusable: self.reusable}
+        BuildInformation{tensor: self.tensor.as_ref().unwrap().clone(), reusable: self.reusable}
     }
 
-    fn get_operations(&mut self) -> &Vec<Box<dyn LayerOp>> {
-        vec![]
+    fn get_operations(&mut self) -> &mut Vec<Box<dyn LayerOp>> {
+        &mut self.operations
     }
 
     fn build(&mut self, 
@@ -101,7 +104,7 @@ impl Layer for InputLayer {
             })?
         ));
 
-        let tensor_shape: Box<dyn Shape> = Box::new(LayerShape::new(*shape.dims()));
+        let tensor_shape: Box<dyn Shape> = Box::new(LayerShape::new(shape.dims()));
         let tensor = Rc::new(RefCell::new(
             Tensor::new(tensor_shape, ptr).map_err(|e| {
                 BuildError::Runtime(e)
