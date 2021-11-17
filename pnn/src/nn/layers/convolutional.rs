@@ -163,7 +163,8 @@ impl Layer for ConvolutionalLayer {
 
         let shape = self.shape().unwrap();
         let input_tensor = info[0].tensor.clone();
-        if shape.as_ref().dims() == input_tensor.borrow().shape().dims() && info[0].reusable {
+        // Inplace conv not work ;(
+        if shape.as_ref().dims() == input_tensor.borrow().shape().dims() && info[0].reusable && false {
             self.tensor = Some(input_tensor.clone())
         } else {
             let ptr = Rc::new(RefCell::new(

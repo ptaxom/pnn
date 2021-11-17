@@ -6,7 +6,7 @@ use std::{
 };
 use crate::parsers::*;
 use crate::nn::errors::*;
-use crate::cudnn::{cudnnHandle_t, cudnnCreate, cudnnDataType};
+use crate::cudnn::{cudnnHandle_t, cudnnCreate, cudnnDataType, cudaDeviceSynchronize};
 
 pub type LayerRef = Rc<RefCell<Box<dyn Layer>>>;
 
@@ -261,6 +261,25 @@ impl Network {
             }
             self.layers[i].borrow_mut().build(context.clone(), data_type.clone(), build_info, has_depend_layers)?;
         }
+
+        Ok(())
+    }
+
+    // Dummy forward
+    pub fn forward(&mut self) -> Result<(), RuntimeError> {
+        if self.batchsize == None {
+            return Err(RuntimeError::Other(String::from("Batchsize is not setted")))
+        }
+        if self.context == None {
+            return Err(RuntimeError::Other(String::from("Network not builded")))
+        }
+
+        for i in 1..self.layers.len() {
+            self.layers[i].borrow_mut().forward()?;
+        }
+        cudaDeviceSynchronize().map_err(|e| {
+            RuntimeError::Cuda(e)
+        })?;
 
         Ok(())
     }

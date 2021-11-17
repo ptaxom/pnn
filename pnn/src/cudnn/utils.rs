@@ -823,3 +823,13 @@ pub fn cudaMemcpyAsync(
         }
     }
 }
+
+pub fn cudaDeviceSynchronize() -> Result<(), cudaError> {
+    unsafe {
+        let res = pnn_sys::cudaDeviceSynchronize();
+        match  res{
+            0 => Ok(()),
+            x => Err(cudaError::from(x))
+        }
+    }
+}
