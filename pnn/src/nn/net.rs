@@ -116,6 +116,16 @@ impl Network {
         Ok(())
     }
 
+    fn check_inited(&self) -> Result<(), RuntimeError> {
+        if self.batchsize == None {
+            return Err(RuntimeError::Other(String::from("Batchsize is not setted")))
+        }
+        if self.context == None {
+            return Err(RuntimeError::Other(String::from("Network is not builded")))
+        }
+        Ok(())
+    }
+
     pub fn from_darknet(darknet_cfg: String) -> Result<Self, Box<dyn std::error::Error>> {
         let config = parse_file(&darknet_cfg)?;
         if config.len() < 2 {
@@ -316,6 +326,31 @@ impl Network {
         }
         Ok(())
 
+    }
+
+    pub fn load_image(&mut self, image_path: String, batch_id: usize) -> Result<(), RuntimeError> {
+        self.check_inited()?;
+        if batch_id >= self.batchsize.unwrap() {
+            return Err(RuntimeError::Other(String::from("Batch index is greater than network capacity")))
+        }
+        let mut layer = self.layers[0].borrow_mut();
+        let input_layer = layer.as_any_mut().downcast_mut::<InputLayer>().unwrap();
+        let shape = input_layer.shape().unwrap();
+        let width = shape.W().unwrap();
+        let height = shape.H().unwrap();
+        let path = std::ffi::CString::new(image_path).unwrap();
+        unsafe {
+            let res = pnn_sys::load_image2batch(
+                path.as_ptr(),
+                batch_id,
+                width, height,
+                input_layer.get_build_information().tensor.borrow_mut().ptr().borrow_mut().ptr() as *mut std::os::raw::c_void
+            );
+            if res != 0 {
+                return Err(RuntimeError::Other(String::from("Couldnt load image")))
+            }
+        }
+        Ok(())
     }
 }
 

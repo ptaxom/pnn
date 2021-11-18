@@ -15,7 +15,7 @@ use crate::cudnn::{cudnnHandle_t, cudnnDataType};
 #[derive(Debug)]
 pub struct BuildInformation {
     // Output tensor
-    tensor: OutputTensor,
+    pub tensor: OutputTensor,
     // Can be used for next layers both as input and output
     reusable: bool
 }

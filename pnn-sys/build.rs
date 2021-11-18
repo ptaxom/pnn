@@ -25,5 +25,10 @@ fn main() {
         .flag("--use_fast_math")
         .flag("-arch=sm_80") // TODO: Add autodiscovery
         .files(&["./cuda/mish.cu", "./cuda/upsample.cu", "./cuda/utils.cpp"])
-        .compile("kernels.a")
+        .compile("kernels.a");
+
+    let opencv_libs = ["imgcodecs", "core", "imgproc"];
+    for lib in opencv_libs {
+        println!("cargo:rustc-link-lib=opencv_{}", lib);
+    }
 }
