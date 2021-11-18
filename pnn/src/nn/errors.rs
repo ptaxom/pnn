@@ -7,14 +7,16 @@ use crate::cudnn::{cudaError, cudnnError};
 #[derive(Debug)]
 pub enum BuildError {
     DimInferError(ShapeError),
-    Rebuild,
+    Runtime(RuntimeError),
+    Rebuild(String),
 }
 
 impl fmt::Display for BuildError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             BuildError::DimInferError(e) => write!(f, "{}", e),
-            BuildError::Rebuild => write!(f, "Network already builded"),
+            BuildError::Runtime(e) => write!(f, "{}", e),
+            BuildError::Rebuild(e) => write!(f, "{}", e),
             _ => write!(f, "Unknown BuildError"),
         }
     }

@@ -23,6 +23,7 @@ use std::{
     os::raw::{c_void, c_int}
 };
 
+#[derive(Debug)]
 pub struct PoolingOp {
     input_tensor: InputTensor,
     output_tensor: OutputTensor,
@@ -84,7 +85,7 @@ impl PoolingOp {
             let w: c_int = 0;
             let ret = pnn_sys::cudnnGetPooling2dForwardOutputDim(
                 desc,
-                input_tensor.borrow_mut().desc(),
+                input_tensor.borrow().desc(),
                 addr_of!(n) as *mut c_int,
                 addr_of!(c) as *mut c_int,
                 addr_of!(h) as *mut c_int,
@@ -95,7 +96,7 @@ impl PoolingOp {
             }
             let dims: Vec<usize> = vec![n, c, h, w].iter().map(|x| {*x as usize}).collect();
             let target = output_tensor.borrow().shape();
-            if &dims != target.dims() {
+            if dims != target.dims() {
                 return Err(RuntimeError::Other(format!("Mismatched shape. CUDNN expect {}x{}x{}x{}, passed {}", n, c, h, w, target)))
             }
         }
@@ -112,7 +113,7 @@ impl LayerOp for PoolingOp {
             let x_desc;
             let x_ptr;
             {   // Allow inplace operations for layer
-                x_desc = self.input_tensor.borrow_mut().desc();
+                x_desc = self.input_tensor.borrow().desc();
                 x_ptr = self.input_tensor.borrow_mut().ptr().borrow().ptr();
             }
             let mut y = self.output_tensor.borrow_mut();

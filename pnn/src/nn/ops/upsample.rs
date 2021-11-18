@@ -40,6 +40,7 @@ fn safe_upsample_fp64(input: *mut c_void, n: usize, c: usize, h: usize, w: usize
     }
 }
 
+#[derive(Debug)]
 pub struct UpsampleOp {
     input_tensor: InputTensor,
     output_tensor: OutputTensor,

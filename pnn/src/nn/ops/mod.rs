@@ -8,7 +8,8 @@ use crate::cudnn::Tensor;
 pub type InputTensor = Rc<RefCell<Tensor>>;
 pub type OutputTensor = Rc<RefCell<Tensor>>;
 
-pub trait LayerOp {
+
+pub trait LayerOp: std::fmt::Debug {
     fn forward(&mut self) -> Result<(), RuntimeError>;
 }
 

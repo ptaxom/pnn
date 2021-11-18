@@ -4,12 +4,15 @@ use std::{
     any::Any,
     sync::atomic::{Ordering},
     rc::Rc,
-    convert::TryFrom
+    convert::TryFrom,
+    cell::RefCell
 };
 
 use crate::nn::shape::*;
-use crate::nn::{Layer, LayerType, errors::*, ActivationType};
+use crate::nn::{Layer, LayerType, errors::*, ActivationType, BuildInformation};
 use crate::parsers::{DeserializationError, parse_list_field};
+use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
+use crate::nn::ops::{LayerOp, OutputTensor, InputTensor, ShortcutOp, ActivationOp};
 
 
 //Input layer for most NNs
@@ -22,7 +25,13 @@ pub struct ShortcutLayer {
     // Offsets to previous layers
     from: Vec<i32>,
     // Activation function
-    activation: ActivationType
+    activation: ActivationType,
+    // List of operations
+    operations: Vec<Box<dyn LayerOp>>,
+    // Can be reusable
+    reusable: bool,
+    // Output tensor
+    tensor: Option<OutputTensor>
 }
 
 const SUPPORTED_FIELDS: [&str; 2] = [
@@ -80,7 +89,11 @@ impl Layer for ShortcutLayer {
             log::warn!("Not supported darknet field during deserialization of '{}'. Field '{}' not recognized", name, k)
         });
 
-        Ok(Box::new(ShortcutLayer{name, shape, from, activation}))
+        let tensor = None;
+        let operations = vec![];
+        let reusable = false;
+
+        Ok(Box::new(ShortcutLayer{name, shape, from, activation, tensor, operations, reusable}))
     }
 
     fn layer_type(&self) -> LayerType {
@@ -102,6 +115,56 @@ impl Layer for ShortcutLayer {
         let mut indeces = indeces?;
         indeces.push(position - 1);
         Ok(indeces)
+    }
+
+    fn get_build_information(&self) -> BuildInformation {
+        BuildInformation{tensor: self.tensor.as_ref().unwrap().clone(), reusable: self.reusable}
+    }
+
+    fn get_operations(&mut self) -> &mut Vec<Box<dyn LayerOp>> {
+        &mut self.operations
+    }
+
+    fn build(&mut self, 
+        context: Rc<cudnnHandle_t>,
+        data_type: cudnnDataType,
+        info: Vec<BuildInformation>,
+        has_depend_layers: bool
+    ) -> Result<(), BuildError> {
+        self.reusable = !has_depend_layers;
+
+        // Assuming, that we can use first input layer for inplace operations
+        if !info[0].reusable {
+            return Err(BuildError::Runtime(RuntimeError::Other(String::from("Shortcut can be built only when first tensor is allow inplace ops"))));
+        }
+        self.tensor = Some(info[0].tensor.clone());
+        let mut inputs: Vec<InputTensor> = Vec::new();
+        for i in 1..info.len() {
+            inputs.push(info[i].tensor.clone());
+        }
+
+        let t = info[0].tensor.clone();
+
+        self.operations.push(
+            Box::new(ShortcutOp::new(
+                context.clone(),
+                inputs,
+                t.clone()
+            ).map_err(|e| {
+                BuildError::Runtime(e)
+            })?)
+        );
+        self.operations.push(
+            Box::new(ActivationOp::new(
+                context.clone(), 
+                t.clone(),
+                &data_type, 
+                &self.activation
+            ).map_err(|e| {
+                BuildError::Runtime(e)
+            })?)
+        );
+        Ok(())
     }
 
 }

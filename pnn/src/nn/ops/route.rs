@@ -18,6 +18,7 @@ use std::{
     os::raw::{c_void}
 };
 
+#[derive(Debug)]
 pub struct RouteOp {
     input_tensors: Vec<InputTensor>,
     output_tensor: OutputTensor,
@@ -55,19 +56,16 @@ impl LayerOp for RouteOp {
                 let tensor = &self.input_tensors[tensor_id];
                 let ptr = tensor.borrow_mut().ptr();
                 let n_channels = tensor.borrow().shape().C();
-                let mut src_ptr = ptr.borrow().ptr();
-                for _ in 0..n_channels {
-                    cudaMemcpyAsync(dst_ptr,
-                        src_ptr,
-                        self.channel_size,
-                        cudaMemcpyKind::DeviceToDevice,
-                        self.stream).map_err(|e| {
-                            RuntimeError::Cuda(e)
-                        })?;
-                    unsafe {
-                        dst_ptr = dst_ptr.offset(self.channel_size as isize);
-                        src_ptr = src_ptr.offset(self.channel_size as isize);
-                    }
+                let src_ptr = ptr.borrow().ptr();
+                cudaMemcpyAsync(dst_ptr,
+                    src_ptr,
+                    self.channel_size * n_channels,
+                    cudaMemcpyKind::DeviceToDevice,
+                    self.stream).map_err(|e| {
+                        RuntimeError::Cuda(e)
+                    })?;
+                unsafe {
+                    dst_ptr = dst_ptr.offset((self.channel_size * n_channels) as isize);
                 }
             }
         }

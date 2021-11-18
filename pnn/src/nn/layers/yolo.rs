@@ -3,12 +3,15 @@ use std::{
     self,
     any::Any,
     sync::atomic::{Ordering},
-    rc::Rc
+    rc::Rc,
+    cell::RefCell
 };
 
 use crate::nn::shape::*;
-use crate::nn::{Layer, LayerType, errors::*};
+use crate::nn::{Layer, LayerType, errors::*, BuildInformation};
 use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positive};
+use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
+use crate::nn::ops::{LayerOp, OutputTensor};
 
 
 //Yolo head layer
@@ -22,6 +25,12 @@ pub struct YoloLayer {
     classes: usize,
     // Window sizeensure_positive
     anchors: usize,
+    // List of operations
+    operations: Vec<Box<dyn LayerOp>>,
+    // Can be reusable
+    reusable: bool,
+    // Output tensor
+    tensor: Option<OutputTensor>
 }
 
 const SUPPORTED_FIELDS: [&str; 2] = [
@@ -85,11 +94,48 @@ impl Layer for YoloLayer {
             log::warn!("Not supported darknet field during deserialization of '{}'. Field '{}' not recognized", name, k)
         });
 
-        Ok(Box::new(YoloLayer{name, shape, classes, anchors}))
+        let tensor = None;
+        let operations = vec![];
+        let reusable = false;
+
+        Ok(Box::new(YoloLayer{name, shape, classes, anchors, tensor, operations, reusable}))
     }
 
     fn layer_type(&self) -> LayerType {
         LayerType::Yolo
+    }
+
+    fn get_build_information(&self) -> BuildInformation {
+        BuildInformation{tensor: self.tensor.as_ref().unwrap().clone(), reusable: self.reusable}
+    }
+
+    fn get_operations(&mut self) -> &mut Vec<Box<dyn LayerOp>> {
+        &mut self.operations
+    }
+
+    fn build(&mut self, 
+        context: Rc<cudnnHandle_t>,
+        data_type: cudnnDataType,
+        info: Vec<BuildInformation>,
+        has_depend_layers: bool
+    ) -> Result<(), BuildError> {
+        let shape = self.shape().unwrap();
+
+        let ptr = Rc::new(RefCell::new(
+            DevicePtr::new(data_type.clone(), shape.size()).map_err(|e| {
+                BuildError::Runtime(e)
+            })?
+        ));
+
+        let tensor_shape: Box<dyn Shape> = Box::new(LayerShape::new(shape.dims()));
+        let tensor = Rc::new(RefCell::new(
+            Tensor::new(tensor_shape, ptr).map_err(|e| {
+                BuildError::Runtime(e)
+            })?
+        ));
+
+        self.tensor = Some(tensor);
+        Ok(())
     }
 
 }
