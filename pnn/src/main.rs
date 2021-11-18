@@ -7,6 +7,8 @@ fn main() {
     let mut net = Network::from_darknet(String::from("./cfgs/tests/yolov4-csp.cfg")).unwrap();
     let bs = 1;
     net.set_batchsize(bs).unwrap();
+    net.load_darknet_weights(&String::from("../models/yolov4-csp.weights")).unwrap();
+
     net.build(cudnnDataType::FLOAT).unwrap();
     println!("Builded yolo");
     let N = 10;

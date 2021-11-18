@@ -55,7 +55,8 @@ impl ConvolutionOp {
         pad_y: usize,
         pad_x: usize,
         stride_y: usize,
-        stride_x: usize
+        stride_x: usize,
+        weights: Option<&Vec<f32>>
     ) -> Result<ConvolutionOp, RuntimeError> {
         if data_type != &cudnnDataType::FLOAT {
             return Err(RuntimeError::Other(String::from("ConvolutionOp support only full fp32 weights. Mixing precision in progress")))
@@ -155,7 +156,10 @@ impl ConvolutionOp {
             workspace = DevicePtr::new(cudnnDataType::HALF, workspace_size / 2)?;
         }
         let scales = Scale::new(&data_type, 1., 0.);
-        let filter_data = DevicePtr::new(data_type.clone(), input_channels * filters * size_x * size_y)?;
+        let mut filter_data = DevicePtr::new(data_type.clone(), input_channels * filters * size_x * size_y)?;
+        if let Some(w) = weights {
+            filter_data.load(&w)?;
+        }
 
         Ok(ConvolutionOp{input_tensor, output_tensor, context, filter_desc, filter_data, conv_desc, algo, workspace, scales})
     }
@@ -231,7 +235,8 @@ mod tests {
             32, 3,
             3, 3,
             1, 1,
-            1, 1
+            1, 1,
+            None
         ).unwrap();
     
         conv.forward().unwrap();

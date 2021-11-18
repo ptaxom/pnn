@@ -283,6 +283,40 @@ impl Network {
 
         Ok(())
     }
+
+    pub fn load_darknet_weights(&mut self, path: &String) -> Result<(), BuildError> {
+        use std::io::Read;
+        use std::convert::TryInto;
+        let mut file = std::fs::File::open(path).map_err(|e| {
+            BuildError::IoError(e)
+        })?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).map_err(|e| {
+            BuildError::IoError(e)
+        })?;
+        // _X variable means, that it not used, just for binary compatibility with darknet
+        let major: i32 = i32::from_ne_bytes(buffer[0..4].try_into().unwrap());
+        let minor: i32 = i32::from_ne_bytes(buffer[4..8].try_into().unwrap());
+        let _revision: i32 = i32::from_ne_bytes(buffer[8..12].try_into().unwrap());
+        let version = major * 10 + minor;
+        
+        let mut offset: usize;
+        
+        let _seen_images: usize;
+        if version >= 2 {
+            offset = 20;
+            _seen_images = usize::from_ne_bytes(buffer[12..20].try_into().unwrap());
+        } else {
+            offset = 16;
+            _seen_images = u32::from_ne_bytes(buffer[12..16].try_into().unwrap()) as usize;
+        }
+        
+        for i in 1..self.layers.len() {
+            offset = self.layers[i].borrow_mut().load_darknet_weights(offset, &buffer)?;
+        }
+        Ok(())
+
+    }
 }
 
 

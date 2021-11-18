@@ -49,7 +49,7 @@ impl DevicePtr {
     }
 
     pub fn load<T>(&mut self, other: &Vec<T>) -> Result<(), RuntimeError> {
-        if self.size != other.len() {
+        if self.capacity != other.len() {
             return Err(RuntimeError::Other(String::from("Couldnt load from vector with different size")))
         }
         let vec_type = std::any::type_name::<T>();

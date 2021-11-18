@@ -39,13 +39,16 @@ pub struct BatchnormOp {
 
 }
 
+type F32Vec = Vec<f32>;
+
 // TODO: Move bindings to place of use
 impl BatchnormOp {
     pub fn new(context: Rc<cudnnHandle_t>,
         input_tensor: InputTensor,
         output_tensor: OutputTensor,
         data_type: &cudnnDataType,
-        channels: usize
+        channels: usize,
+        weights: Option<(&F32Vec, &F32Vec, &F32Vec, &F32Vec)>
     ) -> Result<BatchnormOp, RuntimeError> {
         if input_tensor.borrow().shape().dims() != output_tensor.borrow().shape().dims() {
             return Err(RuntimeError::Other(String::from("Mismatched shape. Batchnorm can work only with same input and output shapes")))
@@ -64,11 +67,16 @@ impl BatchnormOp {
         ).map_err(|e| {
             RuntimeError::Cudnn(e)
         })?;
-        let scale_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
-        let bias_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
-        let mean_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
-        let var_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
-
+        let mut bias_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
+        let mut scale_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
+        let mut mean_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
+        let mut var_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
+        if let Some(w) = weights {
+            bias_ptr.load(&w.0)?;
+            scale_ptr.load(&w.1)?;
+            mean_ptr.load(&w.2)?;
+            var_ptr.load(&w.3)?;
+        }
 
         let scales = Scale::new(&data_type, 1., 0.);
         Ok(BatchnormOp{input_tensor, output_tensor,
@@ -140,7 +148,8 @@ mod tests {
             inp.clone(),
             inp.clone(),
             &dtype,
-            32
+            32,
+            None
         ).unwrap();
         bn.forward().unwrap();
     

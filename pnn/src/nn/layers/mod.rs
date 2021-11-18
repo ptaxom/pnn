@@ -61,6 +61,11 @@ pub trait Layer {
         info: Vec<BuildInformation>,
         has_depend_layers: bool
     ) -> Result<(), BuildError>;
+
+    // Initialize weights using darknet model file. Consume initial offset and return new
+    fn load_darknet_weights(&mut self, offset: usize, bytes: &Vec<u8>) -> Result<usize, BuildError> {
+        Ok(offset)
+    }
 }
 
 #[derive(Debug, PartialEq)]

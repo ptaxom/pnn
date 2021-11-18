@@ -3,12 +3,15 @@ use std::{
     error::Error
 };
 use crate::cudnn::{cudaError, cudnnError};
+use crate::parsers::DeserializationError;
 
 #[derive(Debug)]
 pub enum BuildError {
     DimInferError(ShapeError),
     Runtime(RuntimeError),
+    Deserialization(DeserializationError),
     Rebuild(String),
+    IoError(std::io::Error)
 }
 
 impl fmt::Display for BuildError {
@@ -16,6 +19,8 @@ impl fmt::Display for BuildError {
         match self {
             BuildError::DimInferError(e) => write!(f, "{}", e),
             BuildError::Runtime(e) => write!(f, "{}", e),
+            BuildError::Deserialization(e) => write!(f, "{}", e),
+            BuildError::IoError(e) => write!(f, "{}", e),
             BuildError::Rebuild(e) => write!(f, "{}", e),
             _ => write!(f, "Unknown BuildError"),
         }

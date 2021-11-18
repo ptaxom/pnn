@@ -8,6 +8,7 @@ use regex::Regex;
 
 mod errors;
 pub use errors::*;
+use crate::nn::BuildError;
 
 pub type NNConfig = Vec<HashMap<String, String>>; // Currently support only for sequential NNs
 
@@ -92,6 +93,53 @@ pub fn ensure_positive(value: usize, key: &str, layer: &str) -> Result<(), Deser
 
 fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>())
+}
+
+pub fn read_i32(offset: usize, bytes: &Vec<u8>) -> Result<(i32, usize), BuildError> {
+    use std::convert::TryInto;
+    let size = std::mem::size_of::<i32>();
+    if offset + size > bytes.len() {
+        return Err(BuildError::Deserialization(DeserializationError(String::from("Unexpected end of weights file"))));
+    }
+    let v = i32::from_ne_bytes(bytes[offset..offset + size].try_into().map_err(|e| {
+        BuildError::Deserialization(DeserializationError(String::from("Couldnt parse bytes")))
+    })?);
+    Ok((v, offset + size))
+}
+
+pub fn read_f32(offset: usize, bytes: &Vec<u8>) -> Result<(f32, usize), BuildError> {
+    use std::convert::TryInto;
+    let size = std::mem::size_of::<f32>();
+    if offset + size > bytes.len() {
+        return Err(BuildError::Deserialization(DeserializationError(String::from("Unexpected end of weights file"))));
+    }
+    let v = f32::from_ne_bytes(bytes[offset..offset + size].try_into().map_err(|e| {
+        BuildError::Deserialization(DeserializationError(String::from("Couldnt parse bytes")))
+    })?);
+    Ok((v, offset + size))
+}
+
+pub fn read_i64(offset: usize, bytes: &Vec<u8>) -> Result<(i64, usize), BuildError> {
+    use std::convert::TryInto;
+    let size = std::mem::size_of::<i64>();
+    if offset + size > bytes.len() {
+        return Err(BuildError::Deserialization(DeserializationError(String::from("Unexpected end of weights file"))));
+    }
+    let v = i64::from_ne_bytes(bytes[offset..offset + size].try_into().map_err(|e| {
+        BuildError::Deserialization(DeserializationError(String::from("Couldnt parse bytes")))
+    })?);
+    Ok((v, offset + size))
+}
+
+pub fn load_f32_vec(offset: usize, bytes: &Vec<u8>, n_elements: usize) -> Result<(Vec<f32>, usize), BuildError> {
+    let mut vec = Vec::new();
+    let mut start_pos = offset;
+    for _ in 0..n_elements {
+        let (v, new_start_pos) = read_f32(start_pos, bytes)?;
+        start_pos = new_start_pos;
+        vec.push(v);
+    }
+    Ok((vec, start_pos))
 }
 
 #[cfg(test)]

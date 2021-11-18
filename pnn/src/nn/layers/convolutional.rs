@@ -14,6 +14,14 @@ use crate::parsers::{DeserializationError, parse_numerical_field};
 use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
 use crate::nn::ops::{LayerOp, OutputTensor, ConvolutionOp, BatchnormOp, ActivationOp};
 
+type F32Vec = Vec<f32>;
+
+#[derive(Debug)]
+struct Weights {
+    biases: F32Vec,
+    batchnorm: Option<(F32Vec, F32Vec, F32Vec)>,
+    conv: F32Vec
+}
 
 //Convolution
 #[derive(Debug)]
@@ -41,7 +49,11 @@ pub struct ConvolutionalLayer {
     // Can be reusable
     reusable: bool,
     // Output tensor
-    tensor: Option<OutputTensor>
+    tensor: Option<OutputTensor>,
+    // Weights
+    weights: Option<Weights>,
+    // previous channel size
+    prev_c: Option<usize>
 
 }
 
@@ -97,6 +109,7 @@ impl Layer for ConvolutionalLayer {
         }
 
         self.shape = Some(Rc::new(LayerShape::from_nchw(n, self.filters, h as usize, w as usize)));
+        self.prev_c = Some(input_shape.C());
         Ok(())
     }
 
@@ -131,13 +144,16 @@ impl Layer for ConvolutionalLayer {
         let tensor = None;
         let operations = vec![];
         let reusable = false;
+        let weights = None;
+        let prev_c = None;
 
         Ok(Box::new(ConvolutionalLayer{name, shape, 
             filters, batch_normalize, 
             size, stride,
             pad, padding, 
             activation, operations,
-            reusable, tensor
+            reusable, tensor,
+            weights, prev_c
         }))
     }
 
@@ -182,7 +198,10 @@ impl Layer for ConvolutionalLayer {
             self.tensor = Some(tensor);
         }
         let t = self.tensor.as_ref().unwrap();
-
+        let conv_weights = match &self.weights {
+            Some(w) => Some(&w.conv),
+            _ => None
+        };
         self.operations.push(
             Box::new(ConvolutionOp::new(
                 context.clone(),
@@ -190,23 +209,29 @@ impl Layer for ConvolutionalLayer {
                 t.clone(),
                 &data_type, 
                 self.filters,
-                input_tensor.borrow().shape().C(),
+                self.prev_c.unwrap(),
                 self.size, self.size,
                 self.padding, self.padding,
-                self.stride, self.stride
+                self.stride, self.stride,
+                conv_weights
             ).map_err(|e| {
                 BuildError::Runtime(e)
             })?)
         );
 
         if self.batch_normalize {
+            let biases = &self.weights.as_ref().unwrap().biases;
+            let batch_weights = &self.weights.as_ref().unwrap().batchnorm.as_ref().unwrap();
+
+            let batch_weights = Some((biases, &batch_weights.0, &batch_weights.1, &batch_weights.2));
             self.operations.push(
                 Box::new(BatchnormOp::new(
                     context.clone(),
                     t.clone(),
                     t.clone(),
                     &data_type, 
-                    self.filters
+                    self.filters,
+                    batch_weights
                 ).map_err(|e| {
                     BuildError::Runtime(e)
                 })?)
@@ -224,6 +249,25 @@ impl Layer for ConvolutionalLayer {
             })?)
         );
         Ok(())
+    }
+
+    // Initialize weights using darknet model file. Consume initial offset and return new
+    fn load_darknet_weights(&mut self, offset: usize, bytes: &Vec<u8>) -> Result<usize, BuildError> {
+        use crate::parsers::load_f32_vec;
+        let mut batchnorm = None;
+
+        let (biases, mut inner_offset) = load_f32_vec(offset, bytes, self.filters)?;
+        if self.batch_normalize {
+            let (scales, offset) = load_f32_vec(inner_offset, bytes, self.filters)?;
+            let (rolling_mean, offset) = load_f32_vec(offset, bytes, self.filters)?;
+            let (rolling_variance, new_offset) = load_f32_vec(offset, bytes, self.filters)?;
+            inner_offset = new_offset;
+            batchnorm = Some((scales, rolling_mean, rolling_variance));
+        }
+        let (conv, offset) = load_f32_vec(inner_offset, bytes, self.filters * self.size * self.size * self.prev_c.unwrap())?;
+        self.weights = Some(Weights{batchnorm, biases, conv});
+
+        Ok(offset)
     }
 }
 
