@@ -9,9 +9,10 @@ fn main() {
     net.set_batchsize(bs).unwrap();
     net.load_darknet_weights(&String::from("../models/yolov4-csp.weights")).unwrap();
     net.build(cudnnDataType::FLOAT).unwrap();
-    net.load_image(String::from("../models/test.jpg"), 0).unwrap();
-
     println!("Builded yolo");
+    
+    net.load_image(String::from("../models/test2.jpg"), 0).unwrap();
+    net.forward_debug().unwrap();
 
     let N = 1;
     let mut t: f32 = 0.;

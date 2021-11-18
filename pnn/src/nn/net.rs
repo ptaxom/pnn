@@ -275,8 +275,7 @@ impl Network {
         Ok(())
     }
 
-    // Dummy forward
-    pub fn forward(&mut self) -> Result<(), RuntimeError> {
+    pub fn forward_debug(&mut self) -> Result<(), RuntimeError> {
         if self.batchsize == None {
             return Err(RuntimeError::Other(String::from("Batchsize is not setted")))
         }
@@ -287,12 +286,34 @@ impl Network {
         for i in 0..self.layers.len() {
             let mut layer = self.layers[i].borrow_mut();
             layer.forward()?;
+            cudaDeviceSynchronize().map_err(|e| {
+                RuntimeError::Cuda(e)
+            })?;
+
             let ptr = layer.get_build_information().tensor.borrow_mut().ptr();
             ptr.borrow().dump(&format!("./debug/activation/{}.bin", layer.name()))?;
-            // if i == 1 || true {
-            //     let content: Vec<String> = ptr.borrow().download::<f32>()?[..20].iter().map(|x| {(*x).to_string()}).collect();
-            //     println!("{} Data: [{}]", layer.name(), content.join(" "))
-            // }
+
+            let content: Vec<String> = ptr.borrow().download::<f32>()?[..20].iter().map(|x| {(*x).to_string()}).collect();
+            println!("{} Data: [{}]", layer.name(), content.join(" "));
+        }
+        cudaDeviceSynchronize().map_err(|e| {
+            RuntimeError::Cuda(e)
+        })?;
+
+        Ok(())
+    }
+
+    // Dummy forward
+    pub fn forward(&mut self) -> Result<(), RuntimeError> {
+        if self.batchsize == None {
+            return Err(RuntimeError::Other(String::from("Batchsize is not setted")))
+        }
+        if self.context == None {
+            return Err(RuntimeError::Other(String::from("Network not builded")))
+        }
+
+        for i in 1..self.layers.len() {
+            self.layers[i].borrow_mut().forward()?;
         }
         cudaDeviceSynchronize().map_err(|e| {
             RuntimeError::Cuda(e)
