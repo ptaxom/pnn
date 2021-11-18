@@ -19,6 +19,7 @@ fn main() {
         .expect("Couldn't write bindings!");
 
     Build::new()
+        .include("/usr/local/include/opencv4")
         .cuda(true)
         .flag("-cudart=shared")
         .flag("--use_fast_math")
