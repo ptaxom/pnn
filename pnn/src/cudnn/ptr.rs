@@ -66,6 +66,39 @@ impl DevicePtr {
             })?;
         Ok(())
     }
+    
+    pub fn download<T>(&self) -> Result<Vec<T>, RuntimeError> {
+        let vec_type = std::any::type_name::<T>();
+        if  vec_type != self.type_name {
+            return Err(RuntimeError::Other(format!("Rust Vec<{}> couldnt be loaded to DevicePtr<{}>", vec_type, self.type_name)))
+        }
+        
+        let mut data: Vec<T> = Vec::with_capacity(self.capacity);
+        unsafe { data.set_len(self.capacity); }
+
+        cudaMemcpy(data.as_mut_ptr() as *mut c_void, self.ptr as *const c_void, self.size, cudaMemcpyKind::DeviceToHost).map_err(|e| {
+            RuntimeError::Cuda(e)
+        })?;
+        Ok(data)
+    }
+
+    pub fn dump(&self, file_path: &String) -> Result<(), RuntimeError> {
+        use std::io::prelude::*;
+
+        let mut data: Vec<u8> = Vec::with_capacity(self.size);
+        unsafe { data.set_len(self.size); }
+        cudaMemcpy(data.as_mut_ptr() as *mut c_void, self.ptr as *const c_void, self.size, cudaMemcpyKind::DeviceToHost)
+            .expect("Couldnt copy data to CPU during Tensor Display");
+
+        let mut file = std::fs::File::create(file_path).map_err(|_| {
+            RuntimeError::Other(format!("Couldnt create {}", &file_path))
+        })?;
+
+        file.write_all(&data).map_err(|_| {
+            RuntimeError::Other(format!("Couldnt write to file",))
+        })?;
+        Ok(())
+    }
 
 }
 

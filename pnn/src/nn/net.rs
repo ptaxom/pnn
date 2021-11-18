@@ -284,8 +284,15 @@ impl Network {
             return Err(RuntimeError::Other(String::from("Network not builded")))
         }
 
-        for i in 1..self.layers.len() {
-            self.layers[i].borrow_mut().forward()?;
+        for i in 0..self.layers.len() {
+            let mut layer = self.layers[i].borrow_mut();
+            layer.forward()?;
+            let ptr = layer.get_build_information().tensor.borrow_mut().ptr();
+            ptr.borrow().dump(&format!("./debug/activation/{}.bin", layer.name()))?;
+            // if i == 1 || true {
+            //     let content: Vec<String> = ptr.borrow().download::<f32>()?[..20].iter().map(|x| {(*x).to_string()}).collect();
+            //     println!("{} Data: [{}]", layer.name(), content.join(" "))
+            // }
         }
         cudaDeviceSynchronize().map_err(|e| {
             RuntimeError::Cuda(e)
@@ -338,6 +345,7 @@ impl Network {
         let shape = input_layer.shape().unwrap();
         let width = shape.W().unwrap();
         let height = shape.H().unwrap();
+
         let path = std::ffi::CString::new(image_path).unwrap();
         unsafe {
             let res = pnn_sys::load_image2batch(
@@ -346,7 +354,7 @@ impl Network {
                 width, height,
                 input_layer.get_build_information().tensor.borrow_mut().ptr().borrow_mut().ptr() as *mut std::os::raw::c_void
             );
-            if res != 0 {
+            if res == 0 {
                 return Err(RuntimeError::Other(String::from("Couldnt load image")))
             }
         }

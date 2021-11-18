@@ -10,10 +10,10 @@ fn main() {
     net.load_darknet_weights(&String::from("../models/yolov4-csp.weights")).unwrap();
     net.build(cudnnDataType::FLOAT).unwrap();
     net.load_image(String::from("../models/test.jpg"), 0).unwrap();
-    
+
     println!("Builded yolo");
 
-    let N = 10;
+    let N = 1;
     let mut t: f32 = 0.;
     for iter in 0..N {
         let now = Instant::now();
