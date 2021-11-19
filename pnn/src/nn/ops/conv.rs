@@ -58,9 +58,6 @@ impl ConvolutionOp {
         stride_x: usize,
         weights: Option<&Vec<f32>>
     ) -> Result<ConvolutionOp, RuntimeError> {
-        if data_type != &cudnnDataType::FLOAT {
-            return Err(RuntimeError::Other(String::from("ConvolutionOp support only full fp32 weights. Mixing precision in progress")))
-        }
         // # TODO: Fix descriptor leaks
         let filter_desc = cudnnCreateFilterDescriptor().map_err(|e| {
             RuntimeError::Cudnn(e)
@@ -76,12 +73,12 @@ impl ConvolutionOp {
             RuntimeError::Cudnn(e)
         })?;
 
-        // unsafe {
-        //     let res = pnn_sys::cudnnSetConvolutionMathType(conv_desc, pnn_sys::cudnnMathType_t_CUDNN_TENSOR_OP_MATH);
-        //     if res != 0 {
-        //         return Err(RuntimeError::Cudnn(cudnnError::from(res)));
-        //     }
-        // }
+        unsafe {
+            let res = pnn_sys::cudnnSetConvolutionMathType(conv_desc, pnn_sys::cudnnMathType_t_CUDNN_TENSOR_OP_MATH);
+            if res != 0 {
+                return Err(RuntimeError::Cudnn(cudnnError::from(res)));
+            }
+        }
 
         unsafe {
             let n: c_int = 0;

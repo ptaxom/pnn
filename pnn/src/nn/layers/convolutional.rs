@@ -220,10 +220,15 @@ impl Layer for ConvolutionalLayer {
         );
 
         if self.batch_normalize {
-            let biases = &self.weights.as_ref().unwrap().biases;
-            let batch_weights = &self.weights.as_ref().unwrap().batchnorm.as_ref().unwrap();
-
-            let batch_weights = Some((biases, &batch_weights.0, &batch_weights.1, &batch_weights.2));
+            let mut batch_weights: Option<(&F32Vec, &F32Vec, &F32Vec, &F32Vec)> = None;
+            if conv_weights != None {
+                let biases = &self.weights.as_ref().unwrap().biases;
+                if let Some(b_weights) = self.weights.as_ref() {
+                    let  b_wghts = b_weights.batchnorm.as_ref().unwrap();
+                    batch_weights = Some((biases, &b_wghts.0, &b_wghts.1, &b_wghts.2));
+                }
+            }
+          
             self.operations.push(
                 Box::new(BatchnormOp::new(
                     context.clone(),

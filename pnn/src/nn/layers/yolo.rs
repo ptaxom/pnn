@@ -119,22 +119,7 @@ impl Layer for YoloLayer {
         info: Vec<BuildInformation>,
         has_depend_layers: bool
     ) -> Result<(), BuildError> {
-        let shape = self.shape().unwrap();
-
-        let ptr = Rc::new(RefCell::new(
-            DevicePtr::new(data_type.clone(), shape.size()).map_err(|e| {
-                BuildError::Runtime(e)
-            })?
-        ));
-
-        let tensor_shape: Box<dyn Shape> = Box::new(LayerShape::new(shape.dims()));
-        let tensor = Rc::new(RefCell::new(
-            Tensor::new(tensor_shape, ptr).map_err(|e| {
-                BuildError::Runtime(e)
-            })?
-        ));
-
-        self.tensor = Some(tensor);
+        self.tensor = Some(info[0].tensor.clone());
         Ok(())
     }
 

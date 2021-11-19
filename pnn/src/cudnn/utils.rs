@@ -718,8 +718,8 @@ pub fn cudnnSetFilter4dDescriptor(
     unsafe {
         let res = cudnnSetFilter4dDescriptor(
             filterDesc,
-            cudnnTensorFormat_t_CUDNN_TENSOR_NCHW, 
             data_type as cudnnDataType_t,
+            cudnnTensorFormat_t_CUDNN_TENSOR_NCHW, 
             k as ::std::os::raw::c_int,
             c as ::std::os::raw::c_int,
             h as ::std::os::raw::c_int,
