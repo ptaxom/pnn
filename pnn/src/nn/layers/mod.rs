@@ -55,6 +55,10 @@ pub trait Layer {
         Ok(())
     }
 
+    fn forward_debug(&mut self) -> Result<(), RuntimeError> {
+        self.forward()
+    }
+
     fn build(&mut self, 
         context: Rc<cudnnHandle_t>,
         data_type: cudnnDataType,

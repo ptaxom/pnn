@@ -381,6 +381,14 @@ impl Network {
         }
         Ok(())
     }
+
+    pub fn load_bind(&self, bin_path: &String) -> Result<(), RuntimeError>  {
+        self.check_inited()?;
+        let layer = self.layers[0].borrow_mut();
+        let ptr = layer.get_build_information().tensor.borrow_mut().ptr();
+        ptr.borrow_mut().load_bin(bin_path)?;
+        Ok(())
+    }
 }
 
 

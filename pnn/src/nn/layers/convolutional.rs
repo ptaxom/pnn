@@ -274,6 +274,24 @@ impl Layer for ConvolutionalLayer {
 
         Ok(offset)
     }
+
+    fn forward_debug(&mut self) -> Result<(), RuntimeError> {
+        let mut i = 0;
+        let suffixes = ["conv", "batchnorm", "act"];
+        let name = &self.name();
+        let ptr = self.tensor.as_ref().unwrap().borrow_mut().ptr();
+
+        for op in self.get_operations() {
+            op.forward()?;
+            ptr.borrow().dump(
+                &format!("./debug/activation/{}_{}.bin", name, suffixes[i])
+            ).unwrap();
+            i += 1;
+        }
+        Ok(())
+    }
+
+    
 }
 
 

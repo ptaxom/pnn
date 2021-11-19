@@ -11,10 +11,11 @@ fn main() {
     net.build(cudnnDataType::FLOAT).unwrap();
     println!("Builded yolo");
     
-    net.load_image(String::from("../models/test2.jpg"), 0).unwrap();
+    // net.load_image(String::from("../models/test2.jpg"), 0).unwrap();
+    net.load_bin(&String::from("./debug/darknet/input_0.bin")).unwrap();
     net.forward_debug().unwrap();
 
-    let N = 1;
+    let N = 10;
     let mut t: f32 = 0.;
     for iter in 0..N {
         let now = Instant::now();
@@ -23,6 +24,5 @@ fn main() {
     }
     let fps = N as f32 / t * bs as f32;
     println!("Estimated FPS = {}[{}]", fps, t);
-    std::thread::sleep_ms(5000);
     // net.render(String::from("./render/test.dot")).unwrap();
 }

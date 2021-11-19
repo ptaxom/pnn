@@ -87,8 +87,9 @@ impl DevicePtr {
 
         let mut data: Vec<u8> = Vec::with_capacity(self.size);
         unsafe { data.set_len(self.size); }
-        cudaMemcpy(data.as_mut_ptr() as *mut c_void, self.ptr as *const c_void, self.size, cudaMemcpyKind::DeviceToHost)
-            .expect("Couldnt copy data to CPU during Tensor Display");
+        cudaMemcpy(data.as_mut_ptr() as *mut c_void, self.ptr as *const c_void, self.size, cudaMemcpyKind::DeviceToHost).map_err(|e| {
+            RuntimeError::Cuda(e)
+        })?;
 
         let mut file = std::fs::File::create(file_path).map_err(|_| {
             RuntimeError::Other(format!("Couldnt create {}", &file_path))
@@ -96,6 +97,27 @@ impl DevicePtr {
 
         file.write_all(&data).map_err(|_| {
             RuntimeError::Other(format!("Couldnt write to file",))
+        })?;
+        Ok(())
+    }
+
+    pub fn load_bin(&mut self, file_path: &String) -> Result<(), RuntimeError> {
+        use std::io::Read;
+
+        let mut file = std::fs::File::open(file_path).map_err(|_| {
+           RuntimeError::Other(format!("Couldnt open {}", &file_path))
+        })?;
+
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).map_err(|_| {
+            RuntimeError::Other(format!("Couldnt read from {}", &file_path))
+        })?;
+        if buffer.len() != self.size {
+            return Err(RuntimeError::Other(String::from("Couldnt load from vector with different size")))
+        }
+
+        cudaMemcpy(self.ptr, buffer.as_mut_ptr() as *mut c_void, self.size, cudaMemcpyKind::HostToDevice).map_err(|e| {
+            RuntimeError::Cuda(e)
         })?;
         Ok(())
     }
