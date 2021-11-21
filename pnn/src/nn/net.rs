@@ -7,6 +7,7 @@ use std::{
 use crate::parsers::*;
 use crate::nn::errors::*;
 use crate::cudnn::{cudnnHandle_t, cudnnCreate, cudnnDataType, cudaDeviceSynchronize};
+use crate::nn::ops::*;
 
 pub type LayerRef = Rc<RefCell<Box<dyn Layer>>>;
 
@@ -25,7 +26,11 @@ pub struct Network {
     // Batchsize
     batchsize: Option<usize>,
     // cudnn context
-    context: Option<Rc<cudnnHandle_t>>
+    context: Option<Rc<cudnnHandle_t>>,
+    // Input size(height, width)
+    size: (usize, usize),
+    // Yolo heads
+    yolo_heads: Vec<LayerRef>
 }
 
 impl Network {
@@ -133,17 +138,36 @@ impl Network {
                 Box::new(DeserializationError(String::from("Network must contain at least input and output layers")))
             )
         }
+        let mut size = (0, 0);
+        let mut yolo_heads = Vec::new();
+
         let mut layers: Vec<LayerRef> = Vec::new();
         let mut n_inputs = 0;
         for layer_cfg in config {
+            if layer_cfg.get("type").unwrap() == "net" {
+                size = (
+                    parse_numerical_field::<usize>(&layer_cfg, "height", true, None)?.unwrap(),
+                    parse_numerical_field::<usize>(&layer_cfg, "width", true, None)?.unwrap(),
+                );
+            }
+            // net should be first in config file, otherwise this code fail
+            if size == (0, 0) {
+                return Err(Box::new(DeserializationError(String::from("Fields height and widht are mandatory"))));
+            }
+
+
             let layer = Network::parse_layer(layer_cfg)?;
             let layer = Rc::new(RefCell::new(layer));
             if layer.as_ref().borrow().layer_type() == LayerType::Input {
                 n_inputs += 1;
             }
+            if layer.as_ref().borrow().layer_type() == LayerType::Yolo {
+                yolo_heads.push(layer.clone());
+            }
 
             layers.push(layer.clone());
         }
+
         if n_inputs != 1 {
             return Err(
                 Box::new(DeserializationError(String::from("Supported only exact one input layer")))
@@ -158,7 +182,7 @@ impl Network {
         }
         let batchsize = None;
         let context = None;
-        let mut net = Network{layers, adjency_matrix, batchsize, context};
+        let mut net = Network{layers, adjency_matrix, batchsize, context, size, yolo_heads};
         net.build_adjency_matrix()?;
         Ok(net)
     }
@@ -382,7 +406,7 @@ impl Network {
         Ok(())
     }
 
-    pub fn load_bind(&self, bin_path: &String) -> Result<(), RuntimeError>  {
+    pub fn load_bin(&self, bin_path: &String) -> Result<(), RuntimeError>  {
         self.check_inited()?;
         let layer = self.layers[0].borrow_mut();
         let ptr = layer.get_build_information().tensor.borrow_mut().ptr();

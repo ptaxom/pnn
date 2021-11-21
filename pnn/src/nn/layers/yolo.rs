@@ -4,15 +4,24 @@ use std::{
     any::Any,
     sync::atomic::{Ordering},
     rc::Rc,
-    cell::RefCell
+    cell::RefCell,
+    sync::mpsc::{
+        channel,
+        Sender,
+        Receiver
+    }
+
 };
 
 use crate::nn::shape::*;
-use crate::nn::{Layer, LayerType, errors::*, BuildInformation};
-use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positive};
+use crate::nn::{Layer, LayerType, errors::*, BuildInformation, BoundingBox};
+use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positive, parse_list_field};
 use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
-use crate::nn::ops::{LayerOp, OutputTensor};
+use crate::nn::ops::{LayerOp, OutputTensor, ConvertOp};
 
+// Not used for now
+type RawChannel = (Sender<Vec<f32>>, Receiver<Vec<f32>>);
+type BboxChannel = (Sender<Vec<BoundingBox>>, Receiver<Vec<BoundingBox>>);
 
 //Yolo head layer
 #[derive(Debug)]
@@ -23,14 +32,21 @@ pub struct YoloLayer {
     shape: Option<Rc<dyn Shape>>,
     // Window stride
     classes: usize,
-    // Window sizeensure_positive
-    anchors: usize,
     // List of operations
     operations: Vec<Box<dyn LayerOp>>,
     // Can be reusable
     reusable: bool,
     // Output tensor
-    tensor: Option<OutputTensor>
+    tensor: Option<OutputTensor>,
+    // Sender to handle predictions
+    data_channel: RawChannel,
+    // Bboxes channel 
+    bbox_channel: BboxChannel,
+    // Scale for x,y coords
+    scale: f32,
+    // Anchors
+    anchors: Vec<(usize, usize)>
+
 }
 
 const SUPPORTED_FIELDS: [&str; 2] = [
@@ -62,7 +78,7 @@ impl Layer for YoloLayer {
         }
 
         self.shape = Some(Rc::new(LayerShape::from_nchw(input_shape.N(),
-            self.anchors * (5 + self.classes),
+            self.anchors.len() * (5 + self.classes),
             input_shape.H().unwrap(), 
             input_shape.W().unwrap()
         )));
@@ -85,9 +101,21 @@ impl Layer for YoloLayer {
         let classes = parse_numerical_field::<usize>(&config, "classes", true, None)?.unwrap();
         ensure_positive(classes, "classes", "YoloLayer")?;
 
-        let anchors = parse_numerical_field::<usize>(&config, "num", true, None)?.unwrap();
-        ensure_positive(anchors, "num", "YoloLayer")?;
-        
+        let scale = parse_numerical_field::<f32>(&config, "classes", true, None)?.unwrap();
+
+        let anchor_sizes = parse_list_field::<usize>(&config, "anchors", "YoloLayer")?;
+        let all_anchors: Vec<(usize, usize)> = anchor_sizes.chunks(2).map(|x| {
+            (x[0], x[1])
+        }).collect();
+
+        let masks =  parse_list_field::<usize>(&config, "mask", "YoloLayer")?;
+        let mut anchors = Vec::new();
+        for (index, anchor) in all_anchors.iter().enumerate() {
+            if masks.contains(&index) {
+                anchors.push(anchor.clone());
+            }
+        }
+
         let _ = config.keys().filter(|k| {
             !SUPPORTED_FIELDS.contains(&&k[..])
         }).map(|k| {
@@ -98,7 +126,15 @@ impl Layer for YoloLayer {
         let operations = vec![];
         let reusable = false;
 
-        Ok(Box::new(YoloLayer{name, shape, classes, anchors, tensor, operations, reusable}))
+        let data_channel = channel();
+        let bbox_channel = channel::<Vec<BoundingBox>>();
+
+        Ok(Box::new(YoloLayer{name, shape,
+            classes, anchors,
+            tensor, operations,
+            reusable, data_channel,
+            bbox_channel, scale
+        }))
     }
 
     fn layer_type(&self) -> LayerType {
@@ -117,15 +153,39 @@ impl Layer for YoloLayer {
         context: Rc<cudnnHandle_t>,
         data_type: cudnnDataType,
         info: Vec<BuildInformation>,
-        has_depend_layers: bool
+        _has_depend_layers: bool
     ) -> Result<(), BuildError> {
-        self.tensor = Some(info[0].tensor.clone());
+        if data_type == cudnnDataType::FLOAT {
+            self.tensor = Some(info[0].tensor.clone());
+        } else {
+            let shape = self.shape().unwrap();
+            let ptr = Rc::new(RefCell::new(
+                DevicePtr::new(cudnnDataType::FLOAT, shape.size()).map_err(|e| {
+                    BuildError::Runtime(e)
+                })?
+            ));
+
+            let tensor_shape: Box<dyn Shape> = Box::new(LayerShape::new(shape.dims()));
+            let tensor = Rc::new(RefCell::new(
+                Tensor::new(tensor_shape, ptr).map_err(|e| {
+                    BuildError::Runtime(e)
+                })?
+            ));
+
+            self.tensor = Some(tensor.clone());
+            self.operations.push(
+                Box::new(ConvertOp::new(
+                    context.clone(),
+                    info[0].tensor.clone(),
+                    tensor.clone(),
+                ).map_err(|e| {
+                    BuildError::Runtime(e)
+                })?)
+            );
+        }
         Ok(())
     }
 
-}
-
-impl YoloLayer {
 }
 
 #[cfg(test)]
@@ -135,7 +195,8 @@ mod tests {
     fn generate_config() -> HashMap<String, String> {
         let mut config: HashMap<String, String> = HashMap::new();
         config.insert(String::from("classes"), String::from("80"));
-        config.insert(String::from("num"), String::from("9"));
+        config.insert(String::from("anchors"), String::from("12, 16, 19, 36, 40, 28, 36, 75, 76, 55, 72, 146, 142, 110, 192, 243, 459, 401"));
+        config.insert(String::from("mask"), String::from("0,1,2"));
         config
     }
 
@@ -145,7 +206,6 @@ mod tests {
         let layer = layer.as_any().downcast_ref::<YoloLayer>().unwrap();
 
         assert_eq!(layer.classes, 80);
-        assert_eq!(layer.anchors, 9);
     }
 
     #[test]
@@ -157,21 +217,13 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Key 'num' is mandatory")]
-    fn test_create_fail_num() {
-        let mut config: HashMap<String, String> = HashMap::new();
-        config.insert(String::from("classes"), String::from("2"));
-        YoloLayer::from_config(config).unwrap();
-    }
-
-    #[test]
     fn test_infer_shape_simple() {
         let shapes: Vec<Rc<dyn Shape>> = vec![Rc::new(LayerShape::from_nchw(32, 3, 10, 20))];
         let mut layer = YoloLayer::from_config(generate_config()).unwrap();
         layer.infer_shape(shapes).unwrap();
         let conv_layer = layer.as_any().downcast_ref::<YoloLayer>().unwrap();
 
-        assert_eq!(*conv_layer.shape().unwrap().dims(), vec![32, 765, 10, 20]);
+        assert_eq!(*conv_layer.shape().unwrap().dims(), vec![32, 255, 10, 20]);
     }
 
     #[test]

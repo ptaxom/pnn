@@ -24,7 +24,7 @@ fn main() {
         .flag("-cudart=shared")
         .flag("--use_fast_math")
         .flag("-arch=sm_80") // TODO: Add autodiscovery
-        .files(&["./cuda/mish.cu", "./cuda/upsample.cu", "./cuda/utils.cpp"])
+        .files(&["./cuda/mish.cu", "./cuda/upsample.cu", "./cuda/utils.cpp", "./cuda/convert.cu"])
         .compile("kernels.a");
 
     let opencv_libs = ["imgcodecs", "core", "imgproc"];

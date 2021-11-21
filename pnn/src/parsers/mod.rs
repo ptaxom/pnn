@@ -101,7 +101,7 @@ pub fn read_i32(offset: usize, bytes: &Vec<u8>) -> Result<(i32, usize), BuildErr
     if offset + size > bytes.len() {
         return Err(BuildError::Deserialization(DeserializationError(String::from("Unexpected end of weights file"))));
     }
-    let v = i32::from_ne_bytes(bytes[offset..offset + size].try_into().map_err(|e| {
+    let v = i32::from_ne_bytes(bytes[offset..offset + size].try_into().map_err(|_e| {
         BuildError::Deserialization(DeserializationError(String::from("Couldnt parse bytes")))
     })?);
     Ok((v, offset + size))
@@ -113,7 +113,7 @@ pub fn read_f32(offset: usize, bytes: &Vec<u8>) -> Result<(f32, usize), BuildErr
     if offset + size > bytes.len() {
         return Err(BuildError::Deserialization(DeserializationError(String::from("Unexpected end of weights file"))));
     }
-    let v = f32::from_ne_bytes(bytes[offset..offset + size].try_into().map_err(|e| {
+    let v = f32::from_ne_bytes(bytes[offset..offset + size].try_into().map_err(|_e| {
         BuildError::Deserialization(DeserializationError(String::from("Couldnt parse bytes")))
     })?);
     Ok((v, offset + size))
@@ -125,7 +125,7 @@ pub fn read_i64(offset: usize, bytes: &Vec<u8>) -> Result<(i64, usize), BuildErr
     if offset + size > bytes.len() {
         return Err(BuildError::Deserialization(DeserializationError(String::from("Unexpected end of weights file"))));
     }
-    let v = i64::from_ne_bytes(bytes[offset..offset + size].try_into().map_err(|e| {
+    let v = i64::from_ne_bytes(bytes[offset..offset + size].try_into().map_err(|_e| {
         BuildError::Deserialization(DeserializationError(String::from("Couldnt parse bytes")))
     })?);
     Ok((v, offset + size))

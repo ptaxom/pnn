@@ -833,3 +833,18 @@ pub fn cudaDeviceSynchronize() -> Result<(), cudaError> {
         }
     }
 }
+
+
+pub fn cvt_data(output: *mut c_void, input: *mut c_void, n_elements: usize, otype: cudnnDataType, itype: cudnnDataType, stream: cudaStream_t) -> Result<(), cudaError> {
+    unsafe {
+        let res = pnn_sys::cvt_ptr_data(output, input,
+            n_elements,
+            otype as usize, itype as usize,
+            stream
+        );
+        match  res{
+            0 => Ok(()),
+            x => Err(cudaError::from(x))
+        }
+    }
+}

@@ -1,7 +1,6 @@
 use pnn::nn::Network;
 use pnn::cudnn::cudnnDataType;
-use std::time::{Duration, Instant};
-use std::thread::sleep;
+use std::time::{Instant};
 
 fn main() {
     let mut net = Network::from_darknet(String::from("./cfgs/tests/yolov4-csp.cfg")).unwrap();
@@ -13,16 +12,16 @@ fn main() {
     
     // net.load_image(String::from("../models/test2.jpg"), 0).unwrap();
     net.load_bin(&String::from("./debug/darknet/input_0.bin")).unwrap();
-    net.forward_debug().unwrap();
+    // net.forward_debug().unwrap();
 
-    let N = 10;
+    let n = 10;
     let mut t: f32 = 0.;
-    for iter in 0..N {
+    for _ in 0..n {
         let now = Instant::now();
         net.forward().unwrap();
         t += now.elapsed().as_secs_f32();
     }
-    let fps = N as f32 / t * bs as f32;
+    let fps = n as f32 / t * bs as f32;
     println!("Estimated FPS = {}[{}]", fps, t);
     // net.render(String::from("./render/test.dot")).unwrap();
 }

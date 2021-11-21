@@ -10,8 +10,8 @@ use std::{
 use crate::nn::shape::*;
 use crate::nn::{Layer, LayerType, errors::*, BuildInformation};
 use crate::parsers::{DeserializationError, parse_numerical_field};
-use crate::nn::ops::{LayerOp, OutputTensor};
-use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
+use crate::nn::ops::{LayerOp, OutputTensor, InputTensor, create_otensor, ConvertOp};
+use crate::cudnn::{cudnnHandle_t, cudnnDataType};
 
 
 //Input layer for most NNs
@@ -27,6 +27,7 @@ pub struct InputLayer {
     tensor: Option<OutputTensor>,
     reusable: bool,
     operations: Vec<Box<dyn LayerOp>>,
+    input_tensor: Option<InputTensor>
 }
 
 
@@ -74,8 +75,9 @@ impl Layer for InputLayer {
         let tensor = None;
         let reusable = false;
         let operations = vec![];
+        let input_tensor = None;
 
-        Ok(Box::new(InputLayer{name, shape, dims, tensor, reusable, operations}))
+        Ok(Box::new(InputLayer{name, shape, dims, tensor, reusable, operations, input_tensor}))
     }
 
     fn layer_type(&self) -> LayerType {
@@ -93,25 +95,29 @@ impl Layer for InputLayer {
     fn build(&mut self, 
         context: Rc<cudnnHandle_t>,
         data_type: cudnnDataType,
-        info: Vec<BuildInformation>,
-        has_depend_layers: bool
+        _info: Vec<BuildInformation>,
+        _has_depend_layers: bool
     ) -> Result<(), BuildError> {
         let shape = self.shape().unwrap();
+        let itensor = create_otensor(shape.clone(), cudnnDataType::FLOAT)?;
+        self.input_tensor = Some(itensor.clone());
 
-        let ptr = Rc::new(RefCell::new(
-            DevicePtr::new(data_type.clone(), shape.size()).map_err(|e| {
-                BuildError::Runtime(e)
-            })?
-        ));
-
-        let tensor_shape: Box<dyn Shape> = Box::new(LayerShape::new(shape.dims()));
-        let tensor = Rc::new(RefCell::new(
-            Tensor::new(tensor_shape, ptr).map_err(|e| {
-                BuildError::Runtime(e)
-            })?
-        ));
-
-        self.tensor = Some(tensor);
+        if data_type != cudnnDataType::FLOAT {
+            let otensor = create_otensor(shape.clone(), data_type.clone())?;
+            self.operations.push(
+                Box::new(ConvertOp::new(
+                    context.clone(),
+                    itensor.clone(),
+                    otensor.clone(),
+                ).map_err(|e| {
+                    BuildError::Runtime(e)
+                })?)
+            );
+            self.tensor = Some(otensor);
+        }
+        else {
+            self.tensor = Some(itensor)
+        }
         Ok(())
     }
 

@@ -10,4 +10,6 @@ extern "C" {
     pub fn upsample_forward_fp64(input: *mut c_void, n: usize, c: usize, h: usize, w: usize, stride: usize, scale: f32, output: *mut c_void, stream: cudaStream_t) -> cudaError_t;
 
     pub fn load_image2batch(image_path: *const c_char, batch_id: usize, width: usize,  height: usize, input_data: *mut c_void) -> c_int;
+
+    pub fn cvt_ptr_data(output: *mut c_void, input: *mut c_void, n_elements: usize, otype: usize, itype: usize, stream: cudaStream_t) -> cudaError_t;
 }

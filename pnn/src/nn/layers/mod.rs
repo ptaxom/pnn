@@ -2,8 +2,7 @@ use std::{
     collections::HashMap,
     self,
     any::Any,
-    rc::Rc,
-    cell::RefCell
+    rc::Rc
 };
 
 use crate::nn::shape::*;
@@ -67,7 +66,7 @@ pub trait Layer {
     ) -> Result<(), BuildError>;
 
     // Initialize weights using darknet model file. Consume initial offset and return new
-    fn load_darknet_weights(&mut self, offset: usize, bytes: &Vec<u8>) -> Result<usize, BuildError> {
+    fn load_darknet_weights(&mut self, offset: usize, _bytes: &Vec<u8>) -> Result<usize, BuildError> {
         Ok(offset)
     }
 }
@@ -129,6 +128,10 @@ impl std::convert::TryFrom<&String> for ActivationType {
         Err(DeserializationError(format!("Couldnt parse activation from {}", layer_type)))
     }
 }
+
+#[repr(C)]
+#[derive(Debug, PartialEq, Clone)]
+pub struct BoundingBox(f32,f32,f32,f32);
 
 
 mod input;

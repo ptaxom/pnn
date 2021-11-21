@@ -1,7 +1,6 @@
-use crate::nn::{Shape, ShapeError, LayerShape};
+use crate::nn::{Shape, LayerShape};
 use std::{os::raw::c_void,
     fmt,
-    error::Error,
     rc::Rc,
     cell::RefCell
 };
