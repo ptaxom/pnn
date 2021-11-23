@@ -1,4 +1,4 @@
-use crate::cudnn::{cudnnDataType, cudaMalloc, cudaFree, cudaMemcpy, cudaMemcpyKind};
+use crate::cudnn::{cudnnDataType, cudaMalloc, cudaFree, cudaMemcpy, cudaMemcpyKind, cvt_data, cudaStream_t, cudaDeviceSynchronize};
 use crate::nn::RuntimeError;
 use std::{os::raw::c_void};
 
@@ -64,6 +64,43 @@ impl DevicePtr {
         ).map_err(|e| {
                 RuntimeError::Cuda(e)
             })?;
+        Ok(())
+    }
+
+    pub fn load_with_conversion<T>(&mut self, other: &Vec<T>) -> Result<(), RuntimeError> {
+        if self.capacity != other.len() {
+            return Err(RuntimeError::Other(String::from("Couldnt load from vector with different size")))
+        }
+        let vec_type = std::any::type_name::<T>();
+        if  vec_type == "f64" || self.type_name == "f64" {
+            return Err(RuntimeError::Other(format!("Conversions to f64 is not allowed")))
+        }
+        if  vec_type != self.type_name {
+            println!("Loading as usual");
+            return self.load(other);
+        }
+        let src_dtype;
+        if vec_type == "f32" {
+            src_dtype = cudnnDataType::FLOAT;
+        } else {
+            src_dtype = cudnnDataType::HALF;
+        }
+
+        let mut src_device = DevicePtr::new(src_dtype.clone(), other.len())?;
+        src_device.load(other)?;
+        cvt_data(
+            self.ptr,
+            src_device.ptr() as *mut c_void,
+            self.capacity,
+            self.data_type.clone(),
+            src_dtype,
+            0 as cudaStream_t
+        ).map_err(|e| {
+                RuntimeError::Cuda(e)
+            })?;
+        cudaDeviceSynchronize().map_err(|e| {
+            RuntimeError::Cuda(e)
+        })?;
         Ok(())
     }
     

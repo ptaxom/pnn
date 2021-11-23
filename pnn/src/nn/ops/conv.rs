@@ -155,7 +155,7 @@ impl ConvolutionOp {
         let scales = Scale::new(&data_type, 1., 0.);
         let mut filter_data = DevicePtr::new(data_type.clone(), input_channels * filters * size_x * size_y)?;
         if let Some(w) = weights {
-            filter_data.load(&w)?;
+            filter_data.load_with_conversion(&w)?;
         }
 
         Ok(ConvolutionOp{input_tensor, output_tensor, context, filter_desc, filter_data, conv_desc, algo, workspace, scales})

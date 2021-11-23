@@ -397,7 +397,7 @@ impl Network {
                 path.as_ptr(),
                 batch_id,
                 width, height,
-                input_layer.get_build_information().tensor.borrow_mut().ptr().borrow_mut().ptr() as *mut std::os::raw::c_void
+                input_layer.get_input_tensor().unwrap().borrow_mut().ptr().borrow_mut().ptr() as *mut std::os::raw::c_void
             );
             if res == 0 {
                 return Err(RuntimeError::Other(String::from("Couldnt load image")))
@@ -408,8 +408,9 @@ impl Network {
 
     pub fn load_bin(&self, bin_path: &String) -> Result<(), RuntimeError>  {
         self.check_inited()?;
-        let layer = self.layers[0].borrow_mut();
-        let ptr = layer.get_build_information().tensor.borrow_mut().ptr();
+        let mut layer = self.layers[0].borrow_mut();
+        let input_layer = layer.as_any_mut().downcast_mut::<InputLayer>().unwrap();
+        let ptr = input_layer.get_input_tensor().unwrap().borrow_mut().ptr();
         ptr.borrow_mut().load_bin(bin_path)?;
         Ok(())
     }

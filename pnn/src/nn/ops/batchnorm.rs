@@ -72,10 +72,10 @@ impl BatchnormOp {
         let mut mean_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
         let mut var_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
         if let Some(w) = weights {
-            bias_ptr.load(&w.0)?;
-            scale_ptr.load(&w.1)?;
-            mean_ptr.load(&w.2)?;
-            var_ptr.load(&w.3)?;
+            bias_ptr.load_with_conversion(&w.0)?;
+            scale_ptr.load_with_conversion(&w.1)?;
+            mean_ptr.load_with_conversion(&w.2)?;
+            var_ptr.load_with_conversion(&w.3)?;
         }
 
         let scales = Scale::new(&data_type, 1., 0.);

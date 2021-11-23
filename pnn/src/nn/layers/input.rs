@@ -130,6 +130,13 @@ impl InputLayer {
         new_dims.insert(0, batchsize);
         self.shape = Some(Rc::new(LayerShape::new(new_dims)));
     }
+
+    pub fn get_input_tensor(&mut self) -> Result<InputTensor, BuildError> {
+        if let Some(t) = &self.input_tensor {
+            return Ok(t.clone());
+        }
+        Err(BuildError::Runtime(RuntimeError::Other(String::from("Layer is not builded"))))
+    }
 }
 
 #[cfg(test)]

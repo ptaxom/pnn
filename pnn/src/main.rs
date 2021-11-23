@@ -10,8 +10,8 @@ fn main() {
     net.build(cudnnDataType::FLOAT).unwrap();
     println!("Builded yolo");
     
-    net.load_image(String::from("../models/test2.jpg"), 0).unwrap();
-    // net.load_bin(&String::from("./debug/darknet/input_0.bin")).unwrap();
+    // net.load_image(String::from("../models/test2.jpg"), 0).unwrap();
+    net.load_bin(&String::from("./debug/darknet/input_0.bin")).unwrap();
     // net.forward_debug().unwrap();
 
     let n = 1;
@@ -31,5 +31,5 @@ fn main() {
             println!("{}", &bbox);
         }
     }
-    // net.render(String::from("./render/test.dot")).unwrap();
+    net.render(String::from("./render/test.dot")).unwrap();
 }
