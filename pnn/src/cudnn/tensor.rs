@@ -62,6 +62,14 @@ impl Tensor {
     pub fn data_type(&self) -> cudnnDataType {
         self.ptr.borrow().data_type()
     }
+
+    pub fn download<T>(&self) -> Result<Vec<T>, RuntimeError> {
+        self.ptr.borrow_mut().download::<T>()
+    }
+
+    pub fn dump(&self, file_path: &String) -> Result<(), RuntimeError> {
+        self.ptr.borrow_mut().dump(file_path)
+    }
 }
 
 impl Drop for Tensor {

@@ -76,6 +76,9 @@ impl DevicePtr {
         let mut data: Vec<T> = Vec::with_capacity(self.capacity);
         unsafe { data.set_len(self.capacity); }
 
+        crate::cudnn::cudaDeviceSynchronize().map_err(|e| {
+            RuntimeError::Cuda(e)
+        })?;
         cudaMemcpy(data.as_mut_ptr() as *mut c_void, self.ptr as *const c_void, self.size, cudaMemcpyKind::DeviceToHost).map_err(|e| {
             RuntimeError::Cuda(e)
         })?;
@@ -87,6 +90,9 @@ impl DevicePtr {
 
         let mut data: Vec<u8> = Vec::with_capacity(self.size);
         unsafe { data.set_len(self.size); }
+        crate::cudnn::cudaDeviceSynchronize().map_err(|e| {
+            RuntimeError::Cuda(e)
+        })?;
         cudaMemcpy(data.as_mut_ptr() as *mut c_void, self.ptr as *const c_void, self.size, cudaMemcpyKind::DeviceToHost).map_err(|e| {
             RuntimeError::Cuda(e)
         })?;

@@ -413,6 +413,23 @@ impl Network {
         ptr.borrow_mut().load_bin(bin_path)?;
         Ok(())
     }
+
+    pub fn get_yolo_predictions(&self, thresh: f32, iou_tresh: f32) -> Result<Vec<Vec<BoundingBox>>, RuntimeError> {
+        self.check_inited()?;
+        let batchsize = self.batchsize.unwrap();
+        let mut predictions: Vec<Vec<BoundingBox>> = Vec::with_capacity(batchsize);
+        predictions.resize_with(batchsize, ||{Vec::new()});
+
+        for l in &self.yolo_heads {
+            let layer = l.borrow();
+            let head: &YoloLayer = layer.as_any().downcast_ref::<YoloLayer>().unwrap();
+            let mut head_predictions = head.get_bboxes(thresh, self.size)?;
+            for batch_id in 0..batchsize {
+                predictions[batch_id].append(&mut head_predictions[batch_id]);
+            }
+        }
+        Ok(predictions.iter().map(|x| {BoundingBox::nms(x, iou_tresh)}).collect())
+    }
 }
 
 

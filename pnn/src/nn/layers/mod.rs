@@ -129,10 +129,6 @@ impl std::convert::TryFrom<&String> for ActivationType {
     }
 }
 
-#[repr(C)]
-#[derive(Debug, PartialEq, Clone)]
-pub struct BoundingBox(f32,f32,f32,f32);
-
 
 mod input;
 mod convolutional;

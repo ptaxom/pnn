@@ -10,11 +10,11 @@ fn main() {
     net.build(cudnnDataType::FLOAT).unwrap();
     println!("Builded yolo");
     
-    // net.load_image(String::from("../models/test2.jpg"), 0).unwrap();
-    net.load_bin(&String::from("./debug/darknet/input_0.bin")).unwrap();
+    net.load_image(String::from("../models/test2.jpg"), 0).unwrap();
+    // net.load_bin(&String::from("./debug/darknet/input_0.bin")).unwrap();
     // net.forward_debug().unwrap();
 
-    let n = 10;
+    let n = 1;
     let mut t: f32 = 0.;
     for _ in 0..n {
         let now = Instant::now();
@@ -23,5 +23,13 @@ fn main() {
     }
     let fps = n as f32 / t * bs as f32;
     println!("Estimated FPS = {}[{}]", fps, t);
+
+    
+    let preds = net.get_yolo_predictions(0.5, 0.1).unwrap();
+    for b_id in 0..bs {
+        for bbox in &preds[b_id] {
+            println!("{}", &bbox);
+        }
+    }
     // net.render(String::from("./render/test.dot")).unwrap();
 }
