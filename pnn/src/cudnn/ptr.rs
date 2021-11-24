@@ -75,8 +75,7 @@ impl DevicePtr {
         if  vec_type == "f64" || self.type_name == "f64" {
             return Err(RuntimeError::Other(format!("Conversions to f64 is not allowed")))
         }
-        if  vec_type != self.type_name {
-            println!("Loading as usual");
+        if  vec_type == self.type_name {
             return self.load(other);
         }
         let src_dtype;

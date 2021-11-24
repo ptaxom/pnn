@@ -27,7 +27,7 @@ fn main() {
         .files(&["./cuda/mish.cu", "./cuda/upsample.cu", "./cuda/utils.cpp", "./cuda/convert.cu"])
         .compile("kernels.a");
 
-    let opencv_libs = ["imgcodecs", "core", "imgproc"];
+    let opencv_libs = ["imgcodecs", "core", "imgproc", "highgui"];
     for lib in opencv_libs {
         println!("cargo:rustc-link-lib=opencv_{}", lib);
     }

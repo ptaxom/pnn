@@ -142,6 +142,17 @@ pub fn load_f32_vec(offset: usize, bytes: &Vec<u8>, n_elements: usize) -> Result
     Ok((vec, start_pos))
 }
 
+pub fn load_classes(filename: &str) -> Result<Vec<String>, std::io::Error> {
+    let mut file = File::open(filename)?;
+    let mut lines = String::new();
+    file.read_to_string(&mut lines)?;
+
+    let lines: Vec<String> = lines.split_terminator('\n').into_iter().map(|l| {
+        String::from(l)
+    }).collect();
+    Ok(lines)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

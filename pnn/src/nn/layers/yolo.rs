@@ -199,6 +199,7 @@ fn min(a: f32, b: f32) -> f32 {
 
 
 #[derive(Debug, PartialEq, Clone, Copy)]
+#[repr(C)]
 pub struct BoundingBox{
     x0: f32,
     y0: f32,

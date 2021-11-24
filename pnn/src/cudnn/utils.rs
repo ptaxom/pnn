@@ -848,3 +848,27 @@ pub fn cvt_data(output: *mut c_void, input: *mut c_void, n_elements: usize, otyp
         }
     }
 }
+
+pub fn render_bboxes(image_path: &String, bboxes: &Vec<crate::nn::BoundingBox>, classes: &Vec<String>, window_name: &String) -> Result<(), std::io::Error> {
+    unsafe {
+        let path = std::ffi::CString::new(image_path.clone()).unwrap();
+        let wname = std::ffi::CString::new(window_name.clone()).unwrap();
+        let ffi_classes: Vec<std::ffi::CString> = classes.iter().map(|x| {
+            std::ffi::CString::new(x.as_str()).unwrap()
+        }).collect();
+        let mut ffi_ptrs: Vec<*const std::os::raw::c_char> = ffi_classes.iter().map(|x| {
+            x.as_ptr()
+        }).collect();
+        let ret = pnn_sys::render_bboxes(
+            path.as_ptr(),
+            bboxes.len(),
+            bboxes.clone().as_mut_ptr() as *mut c_void,
+            ffi_ptrs.as_mut_ptr(),
+            wname.as_ptr()
+        );
+        if ret == 0 {
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Couldnt render {}", image_path)));
+        }
+    }
+    Ok(())
+}

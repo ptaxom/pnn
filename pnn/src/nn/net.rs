@@ -327,7 +327,6 @@ impl Network {
         Ok(())
     }
 
-    // Dummy forward
     pub fn forward(&mut self) -> Result<(), RuntimeError> {
         if self.batchsize == None {
             return Err(RuntimeError::Other(String::from("Batchsize is not setted")))

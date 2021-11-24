@@ -3,6 +3,8 @@ use pnn::cudnn::cudnnDataType;
 use std::time::{Instant};
 
 fn main() {
+    let impath = String::from("../models/test2.jpg");
+    let classes = pnn::parsers::load_classes("./cfgs/tests/coco.names").unwrap();
     let mut net = Network::from_darknet(String::from("./cfgs/tests/yolov4-csp.cfg")).unwrap();
     let bs = 1;
     net.set_batchsize(bs).unwrap();
@@ -10,7 +12,7 @@ fn main() {
     net.build(cudnnDataType::FLOAT).unwrap();
     println!("Builded yolo");
     
-    // net.load_image(String::from("../models/test2.jpg"), 0).unwrap();
+    // net.load_image(impath.clone(), 0).unwrap();
     net.load_bin(&String::from("./debug/darknet/input_0.bin")).unwrap();
     // net.forward_debug().unwrap();
 
@@ -31,5 +33,6 @@ fn main() {
             println!("{}", &bbox);
         }
     }
+    pnn::cudnn::render_bboxes(&impath, &preds[0], &classes, &String::from("Result")).unwrap();
     net.render(String::from("./render/test.dot")).unwrap();
 }

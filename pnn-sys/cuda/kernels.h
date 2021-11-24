@@ -21,5 +21,6 @@ extern "C" {
     cudaError_t cvt_ptr_data(void* output, void* input, size_t n_elements, size_t otype, size_t itype, cudaStream_t stream);
 
     int load_image2batch(const char* image_path, size_t batch_id, int width, int height, void* input_data);
+    int render_bboxes(const char* image_path, size_t n_boxes, void* const boxes, const char** classes, const char* window_name);
 
 }
