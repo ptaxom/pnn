@@ -14,7 +14,7 @@ fn main() {
     
     // net.load_image(impath.clone(), 0).unwrap();
     net.load_bin(&String::from("./debug/darknet/input_0.bin")).unwrap();
-    // net.forward_debug().unwrap();
+    net.forward_debug().unwrap();
 
     let n = 1;
     let mut t: f32 = 0.;

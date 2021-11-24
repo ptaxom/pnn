@@ -317,7 +317,7 @@ impl Network {
             let ptr = layer.get_build_information().tensor.borrow_mut().ptr();
             ptr.borrow().dump(&format!("./debug/activation/{}.bin", layer.name()))?;
 
-            let content: Vec<String> = ptr.borrow().download::<f32>()?[..20].iter().map(|x| {(*x).to_string()}).collect();
+            let content: Vec<String> = ptr.borrow().download_with_conversion::<f32>()?[..20].iter().map(|x| {(*x).to_string()}).collect();
             println!("{} Data: [{}]", layer.name(), content.join(" "));
         }
         cudaDeviceSynchronize().map_err(|e| {

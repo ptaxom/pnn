@@ -102,6 +102,39 @@ impl DevicePtr {
         })?;
         Ok(())
     }
+
+    pub fn download_with_conversion<T>(&self) -> Result<Vec<T>, RuntimeError> {
+
+        let vec_type = std::any::type_name::<T>();
+        if  vec_type == "f64" || self.type_name == "f64" {
+            return Err(RuntimeError::Other(format!("Conversions to f64 is not allowed")))
+        }
+        if  vec_type == self.type_name {
+            return self.download::<T>();
+        }
+        let dst_dtype;
+        if vec_type == "f32" {
+            dst_dtype = cudnnDataType::FLOAT;
+        } else {
+            dst_dtype = cudnnDataType::HALF;
+        }
+
+        let dst_device = DevicePtr::new(dst_dtype.clone(), self.capacity)?;
+        cvt_data(
+            dst_device.ptr() as *mut c_void,
+            self.ptr,
+            self.capacity,
+            dst_dtype,
+            self.data_type.clone(),
+            0 as cudaStream_t
+        ).map_err(|e| {
+                RuntimeError::Cuda(e)
+            })?;
+        cudaDeviceSynchronize().map_err(|e| {
+            RuntimeError::Cuda(e)
+        })?;
+        return dst_device.download::<T>();
+    }
     
     pub fn download<T>(&self) -> Result<Vec<T>, RuntimeError> {
         let vec_type = std::any::type_name::<T>();
