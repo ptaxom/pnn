@@ -41,7 +41,8 @@ pub struct BatchnormOp {
 
 type F32Vec = Vec<f32>;
 
-// TODO: Move bindings to place of use
+// #TODO: Move bindings to place of use
+// #TODO: check dtypes for half inference
 impl BatchnormOp {
     pub fn new(context: Rc<cudnnHandle_t>,
         input_tensor: InputTensor,

@@ -3,6 +3,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
+#include <cudnn.h>
 
 const size_t BLOCK_SIZE = 512;
 
@@ -19,6 +20,8 @@ extern "C" {
     cudaError_t upsample_forward_fp64(void* input, size_t n, size_t c, size_t h, size_t w, size_t stride, float scale, void* output, cudaStream_t stream);
 
     cudaError_t cvt_ptr_data(void* output, void* input, size_t n_elements, size_t otype, size_t itype, cudaStream_t stream);
+
+    cudaError_t add_bias(void *inplace_data, void* biases, size_t n_elements, size_t n_channels, size_t channel_size, cudnnDataType_t dtype, cudaStream_t stream);
 
     int load_image2batch(const char* image_path, size_t batch_id, int width, int height, void* input_data);
     int render_bboxes(const char* image_path, size_t n_boxes, void* const boxes, const char** classes, const char* window_name);

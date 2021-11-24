@@ -314,11 +314,14 @@ impl Network {
                 RuntimeError::Cuda(e)
             })?;
 
-            let ptr = layer.get_build_information().tensor.borrow_mut().ptr();
-            ptr.borrow().dump(&format!("./debug/activation/{}.bin", layer.name()))?;
+            let show = true;
+            if show {
+                let ptr = layer.get_build_information().tensor.borrow_mut().ptr();
+                ptr.borrow().dump(&format!("./debug/activation/fused_{}.bin", layer.name()))?;
 
-            let content: Vec<String> = ptr.borrow().download_with_conversion::<f32>()?[..20].iter().map(|x| {(*x).to_string()}).collect();
-            println!("{} Data: [{}]", layer.name(), content.join(" "));
+                let content: Vec<String> = ptr.borrow().download_with_conversion::<f32>()?[..20].iter().map(|x| {(*x).to_string()}).collect();
+                println!("{} Data: [{}]", layer.name(), content.join(" "));
+            }
         }
         cudaDeviceSynchronize().map_err(|e| {
             RuntimeError::Cuda(e)
@@ -335,7 +338,7 @@ impl Network {
             return Err(RuntimeError::Other(String::from("Network not builded")))
         }
 
-        for i in 1..self.layers.len() {
+        for i in 0..self.layers.len() {
             self.layers[i].borrow_mut().forward()?;
         }
         cudaDeviceSynchronize().map_err(|e| {

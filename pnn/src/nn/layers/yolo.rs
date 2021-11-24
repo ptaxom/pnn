@@ -241,9 +241,9 @@ impl BoundingBox {
     pub fn nms(bboxes: &Vec<BoundingBox>, iou_tresh: f32) -> Vec<BoundingBox> {
         let mut id = 0;
         let mut boxes = bboxes.clone();
-        // boxes.sort_by(|a, b| {
-        //     b.objectness.partial_cmp(&a.objectness).unwrap()
-        // });
+        boxes.sort_by(|a, b| {
+            b.objectness.partial_cmp(&a.objectness).unwrap()
+        });
 
         while id < boxes.len() {
             boxes = boxes.iter().enumerate().filter_map(|(i, b)| {

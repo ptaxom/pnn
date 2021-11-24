@@ -12,9 +12,10 @@ use crate::nn::shape::*;
 use crate::nn::{Layer, LayerType, errors::*, ActivationType, BuildInformation};
 use crate::parsers::{DeserializationError, parse_numerical_field};
 use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
-use crate::nn::ops::{LayerOp, OutputTensor, ConvolutionOp, BatchnormOp, ActivationOp};
+use crate::nn::ops::{LayerOp, OutputTensor, ConvolutionOp, BatchnormOp, ActivationOp, BiasOp};
 
 type F32Vec = Vec<f32>;
+const FUSE_CONV_BATCHNORM: bool = true;
 
 #[derive(Debug)]
 struct Weights {
@@ -219,10 +220,10 @@ impl Layer for ConvolutionalLayer {
             })?)
         );
 
+        let biases = &self.weights.as_ref().unwrap().biases;
         if self.batch_normalize {
             let mut batch_weights: Option<(&F32Vec, &F32Vec, &F32Vec, &F32Vec)> = None;
             if conv_weights != None {
-                let biases = &self.weights.as_ref().unwrap().biases;
                 if let Some(b_weights) = self.weights.as_ref() {
                     let  b_wghts = b_weights.batchnorm.as_ref().unwrap();
                     batch_weights = Some((biases, &b_wghts.0, &b_wghts.1, &b_wghts.2));
@@ -237,6 +238,18 @@ impl Layer for ConvolutionalLayer {
                     &data_type, 
                     self.filters,
                     batch_weights
+                ).map_err(|e| {
+                    BuildError::Runtime(e)
+                })?)
+            );
+        } else {
+            self.operations.push(
+                Box::new(BiasOp::new(
+                    context.clone(),
+                    t.clone(),
+                    t.clone(),
+                    &data_type,
+                    biases
                 ).map_err(|e| {
                     BuildError::Runtime(e)
                 })?)
@@ -256,12 +269,21 @@ impl Layer for ConvolutionalLayer {
         Ok(())
     }
 
+    // let delta: f64 = bn.0[channel] as f64 / ((bn.2[channel] as f64).sqrt() + 0.00001);
+    // let before = biases[channel];
+    // // result is really differ, see darknet
+    // biases[channel] = (biases[channel] as f64 + ((bn.1[channel] as f64) * delta)) as f32;
+
+
     // Initialize weights using darknet model file. Consume initial offset and return new
     fn load_darknet_weights(&mut self, offset: usize, bytes: &Vec<u8>) -> Result<usize, BuildError> {
         use crate::parsers::load_f32_vec;
         let mut batchnorm = None;
+        let filter_size = self.size * self.size * self.prev_c.ok_or(
+            BuildError::Runtime(RuntimeError::Other(String::from("Network not builded")))
+        )?;
 
-        let (biases, mut inner_offset) = load_f32_vec(offset, bytes, self.filters)?;
+        let (mut biases, mut inner_offset) = load_f32_vec(offset, bytes, self.filters)?;
         if self.batch_normalize {
             let (scales, offset) = load_f32_vec(inner_offset, bytes, self.filters)?;
             let (rolling_mean, offset) = load_f32_vec(offset, bytes, self.filters)?;
@@ -269,7 +291,20 @@ impl Layer for ConvolutionalLayer {
             inner_offset = new_offset;
             batchnorm = Some((scales, rolling_mean, rolling_variance));
         }
-        let (conv, offset) = load_f32_vec(inner_offset, bytes, self.filters * self.size * self.size * self.prev_c.unwrap())?;
+        let (mut conv, offset) = load_f32_vec(inner_offset, bytes, self.filters * filter_size)?;
+
+        if FUSE_CONV_BATCHNORM && self.batch_normalize {
+            self.batch_normalize = false;
+            let bn = batchnorm.unwrap();
+            for channel in 0..self.filters {
+                let delta = bn.0[channel] / (bn.2[channel] + 0.00001).sqrt();
+                biases[channel] -= bn.1[channel] * delta;
+                for i in 0..filter_size {
+                    conv[channel * filter_size + i] *= delta;
+                }
+            }
+            batchnorm = None;
+        }
         self.weights = Some(Weights{batchnorm, biases, conv});
 
         Ok(offset)

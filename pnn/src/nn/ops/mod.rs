@@ -46,6 +46,7 @@ mod route;
 mod shortcut;
 mod upsample;
 mod convert;
+mod bias;
 
 pub use conv::*;
 pub use batchnorm::*;
@@ -55,3 +56,4 @@ pub use route::*;
 pub use shortcut::*;
 pub use upsample::*;
 pub use convert::*;
+pub use bias::*;
