@@ -21,6 +21,7 @@ struct BoundingBox{
 
 std::vector<std::string> load_classes(const char** c_classes);
 std::vector<BoundingBox> load_bboxes(size_t n_boxes, BoundingBox* const boxes);
+void draw_bboxes(cv::Mat &image, const std::vector<BoundingBox> &bboxes, const std::vector<std::string> &classes);
 
 extern "C" {
     dim3 get_gridsize(size_t elements);
