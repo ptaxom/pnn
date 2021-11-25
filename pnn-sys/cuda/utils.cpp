@@ -1,5 +1,6 @@
 #include "kernels.h"
 #include "math.h"
+#include <opencv2/opencv.hpp>
 
 // #TODO: Add more accurate estimation
 dim3 get_gridsize(size_t elements){
@@ -11,8 +12,6 @@ dim3 get_gridsize(size_t elements){
     unsigned int required_height = (required_blocks - proposed_width + 1) / proposed_width;
     return {proposed_width, required_height, 1};
 }
-
-#include <opencv2/opencv.hpp>
 
 // WORK ONLY WITH FLOAT!!!
 int load_image2batch(const char* image_path, size_t batch_id, int width, int height, void* input_data) {
@@ -41,15 +40,6 @@ int load_image2batch(const char* image_path, size_t batch_id, int width, int hei
     }
     return 1;
 }
-struct BoundingBox{
-    float x0;
-    float y0;
-    float x1;
-    float y1;
-    size_t class_id;
-    float probability;
-    float objectness;
-};
 
 const float colors[6][3] = { {1,0,1}, {0,0,1},{0,1,1},{0,1,0},{1,1,0},{1,0,0} };
 
@@ -63,16 +53,29 @@ float get_color(int c, int x, int max)
     return r;
 }
 
-int render_bboxes(const char* image_path, size_t n_boxes, void* const boxes, const char** classes, const char* window_name) {
-    cv::Mat image = cv::imread(image_path);
-    if (image.empty()) return 0;
+std::vector<std::string> load_classes(const char** c_classes) {
+    std::vector<std::string> classes;
+    size_t i = 0;
+    while (c_classes[i]) classes.push_back(c_classes[i++]);
+    return classes;
+}
+
+std::vector<BoundingBox> load_bboxes(size_t n_boxes, BoundingBox* const boxes) {
+    std::vector<BoundingBox> bboxes;
+    for (size_t i = 0; i < n_boxes; i++) 
+        bboxes.push_back(boxes[i]);
+    return bboxes;
+}
+
+void draw_bboxes(cv::Mat &image, const std::vector<BoundingBox> &bboxes, const std::vector<std::string> &classes) {
     cv::Size imsize = image.size();
 
     int thickness = std::max(1.0f, imsize.height * .002f);
+    size_t n_boxes = bboxes.size();
 
-    for(int i = 0; i < n_boxes; i++) {
+    for(size_t i = 0; i < n_boxes; i++) {
         cv::Point p1, p2, p_text;
-        BoundingBox box = ((BoundingBox*)boxes)[i];
+        BoundingBox box = bboxes[i];
 
         p1.x = int(imsize.width * box.x0);
         p2.x = int(imsize.width * box.x1);
@@ -93,6 +96,15 @@ int render_bboxes(const char* image_path, size_t n_boxes, void* const boxes, con
         cv::rectangle(image, p1, p2, color, thickness, 8, 0);
         cv::putText(image, classes[box.class_id], p_text, cv::FONT_HERSHEY_COMPLEX_SMALL, font_size, color, 2 * font_size, cv::LINE_AA);
     }
+}
+
+int render_bboxes(const char* image_path, size_t n_boxes, void* const boxes, const char** classes, const char* window_name) {
+    cv::Mat image = cv::imread(image_path);
+    if (image.empty()) return 0;
+    draw_bboxes(image,
+        load_bboxes(n_boxes, (BoundingBox*)boxes),
+        load_classes(classes)
+    );
     cv::imshow(window_name, image);
     cv::waitKey();
     return 1;

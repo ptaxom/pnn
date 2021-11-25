@@ -16,7 +16,7 @@ fn main() {
     // net.load_bin(&String::from("./debug/darknet/input_0.bin")).unwrap();
     // net.forward_debug().unwrap();
 
-    let n = 1000;
+    let n = 1;
     let mut t: f32 = 0.;
     for _ in 0..n {
         let now = Instant::now();

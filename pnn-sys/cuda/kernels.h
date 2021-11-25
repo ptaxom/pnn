@@ -4,9 +4,23 @@
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
 #include <cudnn.h>
+#include <vector>
+#include <string>
 
 const size_t BLOCK_SIZE = 512;
 
+struct BoundingBox{
+    float x0;
+    float y0;
+    float x1;
+    float y1;
+    size_t class_id;
+    float probability;
+    float objectness;
+};
+
+std::vector<std::string> load_classes(const char** c_classes);
+std::vector<BoundingBox> load_bboxes(size_t n_boxes, BoundingBox* const boxes);
 
 extern "C" {
     dim3 get_gridsize(size_t elements);
