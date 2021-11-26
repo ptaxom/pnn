@@ -82,6 +82,34 @@ private:
     std::vector<std::string> class_names_;
 };
 
+class FileRenderer : public DataProcesser {
+public:
+    virtual bool postprocess(cv::Mat *image, std::vector<BoundingBox> boxes) {
+        draw_bboxes(*image, boxes, class_names_);
+        if (!writer_) {
+            writer_ = new cv::VideoWriter("../models/demo.avi", cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), 25, image->size());
+            if (!writer_ || !writer_->isOpened()) {
+                return true;
+            }
+        }
+        writer_->write(*image);
+        return false;
+    }
+
+    FileRenderer(const std::vector<std::string> &class_names): DataProcesser(), class_names_(class_names) {}
+    
+    ~FileRenderer() {
+        if (writer_) {
+            writer_->release();
+            delete writer_;
+        }
+    }
+
+private:
+    std::vector<std::string> class_names_;
+    cv::VideoWriter *writer_ = nullptr;
+};
+
 template<typename T>
 class Queue{
 public:

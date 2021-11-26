@@ -6,17 +6,17 @@ fn old_main() {
     let impath = String::from("../models/test2.jpg");
     let classes = pnn::parsers::load_classes("./cfgs/tests/coco.names").unwrap();
     let mut net = Network::from_darknet(&String::from("./cfgs/tests/yolov4-csp.cfg")).unwrap();
-    let bs = 4;
+    let bs = 1;
     net.set_batchsize(bs).unwrap();
     net.load_darknet_weights(&String::from("../models/yolov4-csp.weights")).unwrap();
-    net.build(&cudnnDataType::HALF).unwrap();
+    net.build(&cudnnDataType::FLOAT).unwrap();
     println!("Builded yolo");
     
     net.load_image(impath.clone(), 0).unwrap();
     // net.load_bin(&String::from("./debug/darknet/input_0.bin")).unwrap();
     // net.forward_debug().unwrap();
 
-    let n = 1;
+    let n = 1213;
     let mut t: f32 = 0.;
     for _ in 0..n {
         let now = Instant::now();
@@ -38,13 +38,14 @@ fn old_main() {
 }
 
 fn main() {
+    // #TODO: Check multibatch sync
     pnn::cli::demo(
         &String::from("../models/yolo_test.mp4"),
         &String::from("./cfgs/tests/yolov4-csp.cfg"),
         &String::from("../models/yolov4-csp.weights"),
         &String::from("./cfgs/tests/coco.names"),
         &cudnnDataType::HALF,
-        4,
+        1,
         0.3,
         0.3
     ).unwrap();
