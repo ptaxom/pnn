@@ -1,6 +1,7 @@
 use std::{fmt,
     error::Error,
     self};
+use crate::nn::BuildError;
 
 #[derive(Debug)]
 pub struct DeserializationError(pub String);
@@ -17,12 +18,8 @@ impl Error for DeserializationError {}
 pub struct ParseError(pub String);
 
 impl ParseError {
-    pub fn generate<T>(err: &str) -> Result<T, Box<dyn Error>> {
-        Err(
-            Box::new(
-                ParseError(String::from("Couldnt parse line ") + err)
-            )
-        )
+    pub fn generate<T>(err: &str) -> Result<T, BuildError> {
+        Err(BuildError::Parse(ParseError(String::from("Couldnt parse line ") + err)))
     }
 }
 

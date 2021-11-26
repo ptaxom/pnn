@@ -29,7 +29,7 @@ fn main() {
                  "./cuda/blas.cu", "./cuda/demo.cpp"])
         .compile("kernels.a");
 
-    let opencv_libs = ["imgcodecs", "core", "imgproc", "highgui"];
+    let opencv_libs = ["imgcodecs", "core", "imgproc", "highgui", "videoio"];
     for lib in opencv_libs {
         println!("cargo:rustc-link-lib=opencv_{}", lib);
     }

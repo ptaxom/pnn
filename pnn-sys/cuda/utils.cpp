@@ -1,6 +1,5 @@
 #include "kernels.h"
 #include "math.h"
-#include <opencv2/opencv.hpp>
 
 // #TODO: Add more accurate estimation
 dim3 get_gridsize(size_t elements){
@@ -72,6 +71,7 @@ void draw_bboxes(cv::Mat &image, const std::vector<BoundingBox> &bboxes, const s
 
     int thickness = std::max(1.0f, imsize.height * .002f);
     size_t n_boxes = bboxes.size();
+    size_t n_classes = classes.size();
 
     for(size_t i = 0; i < n_boxes; i++) {
         cv::Point p1, p2, p_text;
@@ -82,10 +82,10 @@ void draw_bboxes(cv::Mat &image, const std::vector<BoundingBox> &bboxes, const s
         p1.y = int(imsize.height * box.y0);
         p2.y = int(imsize.height * box.y1);
 
-        int offset = box.class_id * 123457 % n_boxes;
-        float red = get_color(2, offset, n_boxes);
-        float green = get_color(1, offset, n_boxes);
-        float blue = get_color(0, offset, n_boxes);
+        int offset = box.class_id * 123457 % n_classes;
+        float red = get_color(2, offset, n_classes);
+        float green = get_color(1, offset, n_classes);
+        float blue = get_color(0, offset, n_classes);
         float const font_size = imsize.height / 1000.F;
         cv::Size text_size = cv::getTextSize(classes[box.class_id], cv::FONT_HERSHEY_COMPLEX_SMALL, font_size, 1, 0);
 

@@ -93,12 +93,14 @@ mod tests {
         let inp = Rc::new(RefCell::new(Tensor::new(Box::new(LayerShape::from_nchw(4, 32, 416, 416)), x_data.clone()).unwrap()));
     
         let handle = Rc::new(cudnnCreate().unwrap());
+        let mut biases: Vec<f32> = Vec::new();
+        biases.resize_with(32, || {0.});
         let mut bn = BiasOp::new(
             handle,
             inp.clone(),
             inp.clone(),
             &dtype,
-            None
+            &biases            
         ).unwrap();
         bn.forward().unwrap();
     

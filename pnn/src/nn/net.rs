@@ -30,7 +30,9 @@ pub struct Network {
     // Input size(height, width)
     size: (usize, usize),
     // Yolo heads
-    yolo_heads: Vec<LayerRef>
+    yolo_heads: Vec<LayerRef>,
+    // prob_thresh, nms_threshold
+    detection_ops: Option<(f32, f32)>
 }
 
 impl Network {
@@ -131,11 +133,11 @@ impl Network {
         Ok(())
     }
 
-    pub fn from_darknet(darknet_cfg: String) -> Result<Self, Box<dyn std::error::Error>> {
-        let config = parse_file(&darknet_cfg)?;
+    pub fn from_darknet(darknet_cfg: &String) -> Result<Self, BuildError> {
+        let config = parse_file(darknet_cfg)?;
         if config.len() < 2 {
             return Err(
-                Box::new(DeserializationError(String::from("Network must contain at least input and output layers")))
+                BuildError::Deserialization(DeserializationError(String::from("Network must contain at least input and output layers")))
             )
         }
         let mut size = (0, 0);
@@ -146,17 +148,19 @@ impl Network {
         for layer_cfg in config {
             if layer_cfg.get("type").unwrap() == "net" {
                 size = (
-                    parse_numerical_field::<usize>(&layer_cfg, "height", true, None)?.unwrap(),
-                    parse_numerical_field::<usize>(&layer_cfg, "width", true, None)?.unwrap(),
+                    parse_numerical_field::<usize>(&layer_cfg, "height", true, None).map_err(|e| {BuildError::Deserialization(e)})?.unwrap(),
+                    parse_numerical_field::<usize>(&layer_cfg, "width", true, None).map_err(|e| {BuildError::Deserialization(e)})?.unwrap(),
                 );
             }
             // net should be first in config file, otherwise this code fail
             if size == (0, 0) {
-                return Err(Box::new(DeserializationError(String::from("Fields height and widht are mandatory"))));
+                return Err(BuildError::Deserialization(DeserializationError(String::from("Fields height and widht are mandatory"))));
             }
 
 
-            let layer = Network::parse_layer(layer_cfg)?;
+            let layer = Network::parse_layer(layer_cfg).map_err(|e| {
+                BuildError::Deserialization(e)
+            })?;
             let layer = Rc::new(RefCell::new(layer));
             if layer.as_ref().borrow().layer_type() == LayerType::Input {
                 n_inputs += 1;
@@ -170,7 +174,7 @@ impl Network {
 
         if n_inputs != 1 {
             return Err(
-                Box::new(DeserializationError(String::from("Supported only exact one input layer")))
+                BuildError::Deserialization(DeserializationError(String::from("Supported only exact one input layer")))
             )
         }
 
@@ -182,9 +186,20 @@ impl Network {
         }
         let batchsize = None;
         let context = None;
-        let mut net = Network{layers, adjency_matrix, batchsize, context, size, yolo_heads};
-        net.build_adjency_matrix()?;
+        let detection_ops = None;
+        let mut net = Network{layers, adjency_matrix, batchsize, context, size, yolo_heads, detection_ops};
+        net.build_adjency_matrix().map_err(|e| {
+            BuildError::Deserialization(e)
+        })?;
         Ok(net)
+    }
+
+    pub fn get_detection_ops(&self) -> Option<(f32, f32)> {
+        return self.detection_ops.clone()
+    }
+
+    pub fn set_detections_ops(&mut self, threshold: f32, nms_threshold: f32) {
+        self.detection_ops = Some((threshold, nms_threshold));
     }
 
     pub fn render(&self, dot_path: String) -> Result<(), std::io::Error> {
@@ -261,8 +276,12 @@ impl Network {
         }
         Ok(())
     }
+
+    pub fn get_batchsize(&self) -> Option<usize> {
+        self.batchsize.clone()
+    }
     
-    pub fn build(&mut self, data_type: cudnnDataType) -> Result<(), BuildError> {
+    pub fn build(&mut self, data_type: &cudnnDataType) -> Result<(), BuildError> {
         if self.batchsize == None {
             return Err(BuildError::Runtime(RuntimeError::Other(String::from("Batchsize is not setted"))))
         }
@@ -279,7 +298,7 @@ impl Network {
         {   // Allocate tensors for first layer
             let mut first_layer = self.layers[0].borrow_mut();
             let info = Vec::new();
-            first_layer.build(context.clone(), data_type.clone(), info, true)?;
+            first_layer.build(context.clone(), data_type, info, true)?;
         }
 
         for i in 1..self.layers.len() {
@@ -293,7 +312,7 @@ impl Network {
                     build_info.insert(0, info);
                 }
             }
-            self.layers[i].borrow_mut().build(context.clone(), data_type.clone(), build_info, has_depend_layers)?;
+            self.layers[i].borrow_mut().build(context.clone(), data_type, build_info, has_depend_layers)?;
         }
 
         Ok(())
@@ -352,11 +371,11 @@ impl Network {
         use std::io::Read;
         use std::convert::TryInto;
         let mut file = std::fs::File::open(path).map_err(|e| {
-            BuildError::IoError(e)
+            BuildError::Io(e)
         })?;
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer).map_err(|e| {
-            BuildError::IoError(e)
+            BuildError::Io(e)
         })?;
         // _X variable means, that it not used, just for binary compatibility with darknet
         let major: i32 = i32::from_ne_bytes(buffer[0..4].try_into().unwrap());
@@ -417,9 +436,10 @@ impl Network {
         Ok(())
     }
 
-    pub fn get_yolo_predictions(&self, thresh: f32, iou_tresh: f32) -> Result<Vec<Vec<BoundingBox>>, RuntimeError> {
+    pub fn get_yolo_predictions(&self) -> Result<Vec<Vec<BoundingBox>>, RuntimeError> {
         self.check_inited()?;
         let batchsize = self.batchsize.unwrap();
+        let (thresh, iou_tresh) = self.detection_ops.unwrap();
         let mut predictions: Vec<Vec<BoundingBox>> = Vec::with_capacity(batchsize);
         predictions.resize_with(batchsize, ||{Vec::new()});
 
@@ -433,6 +453,21 @@ impl Network {
         }
         Ok(predictions.iter().map(|x| {BoundingBox::nms(x, iou_tresh)}).collect())
     }
+
+    // #TODO: remove it
+    pub fn get_input_ptr(&mut self) -> Result<*mut std::os::raw::c_void , BuildError> {
+        self.check_inited().map_err(|e| {
+            BuildError::Runtime(e)
+        })?;
+        let mut layer = self.layers[0].borrow_mut();
+        let input_layer = layer.as_any_mut().downcast_mut::<InputLayer>().unwrap();
+
+        Ok(input_layer.get_input_tensor().unwrap().borrow_mut().ptr().borrow_mut().ptr() as *mut std::os::raw::c_void)
+    }
+
+    pub fn get_size(&self) -> (usize, usize) {
+        self.size
+    }
 }
 
 
@@ -442,7 +477,7 @@ mod tests {
 
     #[test]
     fn load_yolov4_csp() {
-        let net = Network::from_darknet(String::from("../cfgs/tests/yolov4-csp.cfg")).unwrap();
+        let net = Network::from_darknet(&String::from("../cfgs/tests/yolov4-csp.cfg")).unwrap();
         assert_eq!(net.layers.len(), 161);
     }
 }

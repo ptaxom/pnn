@@ -860,6 +860,7 @@ pub fn render_bboxes(image_path: &String, bboxes: &Vec<crate::nn::BoundingBox>, 
             x.as_ptr()
         }).collect();
         ffi_ptrs.push(std::ptr::null());
+        
         let ret = pnn_sys::render_bboxes(
             path.as_ptr(),
             bboxes.len(),

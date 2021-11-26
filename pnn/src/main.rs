@@ -2,14 +2,14 @@ use pnn::nn::Network;
 use pnn::cudnn::cudnnDataType;
 use std::time::{Instant};
 
-fn main() {
+fn old_main() {
     let impath = String::from("../models/test2.jpg");
     let classes = pnn::parsers::load_classes("./cfgs/tests/coco.names").unwrap();
-    let mut net = Network::from_darknet(String::from("./cfgs/tests/yolov4-csp.cfg")).unwrap();
+    let mut net = Network::from_darknet(&String::from("./cfgs/tests/yolov4-csp.cfg")).unwrap();
     let bs = 4;
     net.set_batchsize(bs).unwrap();
     net.load_darknet_weights(&String::from("../models/yolov4-csp.weights")).unwrap();
-    net.build(cudnnDataType::HALF).unwrap();
+    net.build(&cudnnDataType::HALF).unwrap();
     println!("Builded yolo");
     
     net.load_image(impath.clone(), 0).unwrap();
@@ -26,8 +26,8 @@ fn main() {
     let fps = n as f32 / t * bs as f32;
     println!("Estimated FPS = {}[{}]", fps, t);
 
-    
-    let preds = net.get_yolo_predictions(0.25, 0.1).unwrap();
+    net.set_detections_ops(0.25, 0.1);
+    let preds = net.get_yolo_predictions().unwrap();
     // for b_id in 0..bs {
     //     for bbox in &preds[b_id] {
     //         println!("{}", &bbox);
@@ -35,4 +35,17 @@ fn main() {
     // }
     pnn::cudnn::render_bboxes(&impath, &preds[0], &classes, &String::from("Result")).unwrap();
     net.render(String::from("./render/test.dot")).unwrap();
+}
+
+fn main() {
+    pnn::cli::demo(
+        &String::from("../models/yolo_test.mp4"),
+        &String::from("./cfgs/tests/yolov4-csp.cfg"),
+        &String::from("../models/yolov4-csp.weights"),
+        &String::from("./cfgs/tests/coco.names"),
+        &cudnnDataType::FLOAT,
+        4,
+        0.3,
+        0.3
+    ).unwrap();
 }

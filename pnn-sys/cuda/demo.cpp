@@ -1,5 +1,4 @@
 #include "kernels.h"
-#include <opencv2/opencv.hpp>
 #include <queue>
 #include <chrono>
 #include <thread>
@@ -62,17 +61,17 @@ public:
     void push(const T &item) {
         std::unique_lock<std::mutex> lk(mutex_);
         if (max_size_ > 0) {
-            cv_.wait(lk, [this]{return queue_.size() < max_size;});
+            cv_.wait(lk, [this]{return queue_.size() < max_size_;});
         }
         queue_.push(item);
         lk.unlock();
         cv_.notify_one();
     }
 
-    const T& pop() {
+    T pop() {
         std::unique_lock<std::mutex> lk(mutex_);
         cv_.wait(lk, [this]{return queue_.size() > 0;});
-        auto item = queue_.front();
+        T item = queue_.front();
         queue_.pop();
         lk.unlock();
         cv_.notify_one();
@@ -103,10 +102,10 @@ public:
 
     std::queue<T> drain(const size_t n_elements) {
         std::unique_lock<std::mutex> lk(mutex_);
-        cv_.wait(lk, [this]{return queue_.size() >= n_elements;});
+        cv_.wait(lk, [=]{return queue_.size() >= n_elements;});
         std::queue<T> items;
         for(size_t i = 0; i < n_elements; i++) {
-            items.push(queue_.front())
+            items.push(queue_.front());
             queue_.pop();
         }
         lk.unlock();
@@ -123,7 +122,7 @@ private:
 };
 
 
-const size_t MAX_LOAD_QUEUE_SIZE = 40; // Bufferization up to 10 frames per sample in batch
+const size_t MAX_LOAD_QUEUE_SIZE = 10; // Bufferization up to 10 frames per sample in batch
 
 class ThreadedProcesser {
 public:
@@ -138,7 +137,7 @@ public:
                       BoundingBox* (*inference_call)(void* model, size_t *n_boxes)
                       ): 
         loader_(loader), processer_(processer), batchsize_(batchsize),
-        width_(width), height_(height), inp_ptr_(inp_ptr),
+        width_(width), height_(height), inp_ptr_(static_cast<float*>(inp_ptr)),
         downloaded_(false), model_ptr_(model_ptr),
         inference_call_(inference_call),
         preprocess_finished_(false), exited_(false)
@@ -191,24 +190,23 @@ private:
         }
     }
 
-    cv::Mat preprocess(cv::Mat *frame) {
+    std::vector<cv::Mat> preprocess(cv::Mat *frame) {
         cv::Mat preprocessed_image;
-        cv::resize(preprocessed_image, *frame, cv::Size(width_, height_));
+        cv::resize(*frame, preprocessed_image, cv::Size(width_, height_));
         if (preprocessed_image.empty()) exit(101);
 
         preprocessed_image.convertTo(preprocessed_image, CV_32FC3, 1 / 255.0);
         if (preprocessed_image.empty()) exit(101);
 
-        cv::Mat channels[3];
+        std::vector<cv::Mat> channels;
         cv::split(preprocessed_image, channels);
-        std::swap(channels[0], channels[2]);
-        cv::merge(channels, 3, preprocessed_image);
+        return channels;
     }
 
     void preprocess_thread() {
-        std::queue<std::pair<cv::Mat, cv::Mat*>> processed;
+        std::queue<std::pair<std::vector<cv::Mat>, cv::Mat*>> processed;
         bool poisoned = false;
-        size_t sample_size = 3 * width_ * height_ * sizeof(float);
+        size_t channel_size = width_ * height_;
 
         while (!poisoned) {
             if (loaded_queue_.is_poisoned()) {
@@ -228,13 +226,17 @@ private:
                 while(processed.size() > 0) {
                     auto pair = processed.front();
                     processed.pop();
-                    cudaMemcpy(inp_ptr_ + offset, pair.first.data, sample_size, cudaMemcpyHostToDevice);
+                    for(int channel = 0; channel < 3; channel++)
+                    {
+                        cudaMemcpy(inp_ptr_ + offset, pair.first[2 - channel].data, channel_size  * sizeof(float), cudaMemcpyHostToDevice);
+                        offset += channel_size;
+                    }
                     downloaded_queue_.push(pair.second);
-                    offset += sample_size;
                 }
                 downloaded_ = true;
-                if (poisoned)
+                if (poisoned) {
                     preprocess_finished_ = true;
+                }
                 lk.unlock();
                 inference_cv_.notify_all();
             }
@@ -255,6 +257,7 @@ private:
                 processed_queue_.push(std::make_pair(frame, bboxes));
                 offset += n_boxes_[i+1];
             }
+            free(boxes);
             downloaded_ = false;
             lk.unlock();
             inference_cv_.notify_all();
@@ -267,12 +270,12 @@ private:
     }
 
     void process_thread() {
-        bool poisoned = false;
         while (!processed_queue_.is_poisoned()) {
             auto data = processed_queue_.pop();
             exited_ = processer_->postprocess(data.first, data.second);
             delete data.first;
         }
+        
     }
 
 private:
@@ -281,7 +284,7 @@ private:
     size_t batchsize_;
     size_t width_;
     size_t height_;
-    void* inp_ptr_;
+    float* inp_ptr_;
     void* model_ptr_;
 
     size_t *n_boxes_;
@@ -296,7 +299,6 @@ private:
     bool downloaded_;
     bool preprocess_finished_;
     bool exited_;
-    std::vector<std::thread&> workers;
 
     // ????
     std::thread load_worker_, download_worker_, infer_worker_, processer_worker_;

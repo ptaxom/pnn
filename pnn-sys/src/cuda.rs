@@ -15,4 +15,14 @@ extern "C" {
 
     pub fn cvt_ptr_data(output: *mut c_void, input: *mut c_void, n_elements: usize, otype: usize, itype: usize, stream: cudaStream_t) -> cudaError_t;
     pub fn render_bboxes(image_path: *const c_char, n_boxes: usize, boxes: *const c_void, classes: *const *const c_char, window_name: *const c_char) -> c_int;
+
+    pub fn visual_demo(video_path:  *const c_char,
+        classes: *const *const c_char,
+        batchsize: usize,
+        width: usize,
+        height: usize,
+        inp_ptr: *mut c_void,
+        model_ptr: *mut c_void,
+        infer_call: extern fn(*mut c_void, *mut usize) -> *mut c_void
+        );
 }

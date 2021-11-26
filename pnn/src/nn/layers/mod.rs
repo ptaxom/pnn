@@ -60,7 +60,7 @@ pub trait Layer {
 
     fn build(&mut self, 
         context: Rc<cudnnHandle_t>,
-        data_type: cudnnDataType,
+        data_type: &cudnnDataType,
         info: Vec<BuildInformation>,
         has_depend_layers: bool
     ) -> Result<(), BuildError>;

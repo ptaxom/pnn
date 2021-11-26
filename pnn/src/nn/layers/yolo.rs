@@ -152,11 +152,11 @@ impl Layer for YoloLayer {
 
     fn build(&mut self, 
         context: Rc<cudnnHandle_t>,
-        data_type: cudnnDataType,
+        data_type: &cudnnDataType,
         info: Vec<BuildInformation>,
         _has_depend_layers: bool
     ) -> Result<(), BuildError> {
-        if data_type == cudnnDataType::FLOAT {
+        if data_type == &cudnnDataType::FLOAT {
             self.tensor = Some(info[0].tensor.clone());
         } else {
             let shape = self.shape().unwrap();
@@ -218,6 +218,15 @@ impl fmt::Display for BoundingBox {
 }
 
 impl BoundingBox {
+    pub fn new(x0: f32,
+            y0: f32,
+            x1: f32,
+            y1: f32,
+            class_id: usize,
+            probability: f32,
+            objectness: f32) -> BoundingBox {
+        BoundingBox{x0, y0, x1, y1, class_id, probability, objectness}
+    }
     pub fn area(&self) -> f32 {
         (self.x1 - self.x0) * (self.y1 - self.y0)
     }

@@ -94,7 +94,7 @@ impl Layer for InputLayer {
 
     fn build(&mut self, 
         context: Rc<cudnnHandle_t>,
-        data_type: cudnnDataType,
+        data_type: &cudnnDataType,
         _info: Vec<BuildInformation>,
         _has_depend_layers: bool
     ) -> Result<(), BuildError> {
@@ -102,7 +102,7 @@ impl Layer for InputLayer {
         let itensor = create_otensor(shape.clone(), cudnnDataType::FLOAT)?;
         self.input_tensor = Some(itensor.clone());
 
-        if data_type != cudnnDataType::FLOAT {
+        if data_type != &cudnnDataType::FLOAT {
             let otensor = create_otensor(shape.clone(), data_type.clone())?;
             self.operations.push(
                 Box::new(ConvertOp::new(

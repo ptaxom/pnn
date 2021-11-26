@@ -6,6 +6,7 @@
 #include <cudnn.h>
 #include <vector>
 #include <string>
+#include <opencv2/opencv.hpp>
 
 const size_t BLOCK_SIZE = 512;
 
@@ -40,5 +41,15 @@ extern "C" {
 
     int load_image2batch(const char* image_path, size_t batch_id, int width, int height, void* input_data);
     int render_bboxes(const char* image_path, size_t n_boxes, void* const boxes, const char** classes, const char* window_name);
+
+    void visual_demo(const char* video_path, 
+                 const char** c_classes, 
+                 size_t batchsize,
+                 size_t width,
+                 size_t height,
+                 void* inp_ptr,
+                 void* model_ptr,
+                 BoundingBox* (*infer_call)(void* model, size_t *n_boxes)
+                 );
 
 }
