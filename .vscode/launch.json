@@ -11,7 +11,7 @@
             "program": "${workspaceFolder}/target/debug/pnn",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "env": {"RUST_BACKTRACE": "1"}
+            "env": {"RUST_BACKTRACE": "1", "LD_LIBRARY_PATH": "/usr/local/lib"}
         }
     ]
 }

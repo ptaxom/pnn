@@ -7,7 +7,17 @@ use std::{
 
 use crate::nn::shape::*;
 use crate::nn::errors::*;
+use crate::nn::ops::{LayerOp, OutputTensor};
 use crate::parsers::DeserializationError;
+use crate::cudnn::{cudnnHandle_t, cudnnDataType};
+
+#[derive(Debug)]
+pub struct BuildInformation {
+    // Output tensor
+    pub tensor: OutputTensor,
+    // Can be used for next layers both as input and output
+    reusable: bool
+}
 
 pub trait Layer {
     fn name(&self) -> String;
@@ -31,6 +41,33 @@ pub trait Layer {
             return Err(DeserializationError(String::from("Couldnt compute input index for first layer")))
         }
         Ok(vec![position - 1])
+    }
+
+    fn get_build_information(&self) -> BuildInformation;
+
+    fn get_operations(&mut self) -> &mut Vec<Box<dyn LayerOp>>;
+
+    fn forward(&mut self) -> Result<(), RuntimeError> {
+        for op in self.get_operations() {
+            op.forward()?;
+        }
+        Ok(())
+    }
+
+    fn forward_debug(&mut self) -> Result<(), RuntimeError> {
+        self.forward()
+    }
+
+    fn build(&mut self, 
+        context: Rc<cudnnHandle_t>,
+        data_type: &cudnnDataType,
+        info: Vec<BuildInformation>,
+        has_depend_layers: bool
+    ) -> Result<(), BuildError>;
+
+    // Initialize weights using darknet model file. Consume initial offset and return new
+    fn load_darknet_weights(&mut self, offset: usize, _bytes: &Vec<u8>) -> Result<usize, BuildError> {
+        Ok(offset)
     }
 }
 

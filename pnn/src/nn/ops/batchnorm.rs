@@ -21,6 +21,7 @@ use std::{
     os::raw::{c_void, c_int}
 };
 
+#[derive(Debug)]
 pub struct BatchnormOp {
     input_tensor: InputTensor,
     output_tensor: OutputTensor,
@@ -38,13 +39,17 @@ pub struct BatchnormOp {
 
 }
 
-// TODO: Move bindings to place of use
+type F32Vec = Vec<f32>;
+
+// #TODO: Move bindings to place of use
+// #TODO: check dtypes for half inference
 impl BatchnormOp {
     pub fn new(context: Rc<cudnnHandle_t>,
         input_tensor: InputTensor,
         output_tensor: OutputTensor,
         data_type: &cudnnDataType,
-        channels: usize
+        channels: usize,
+        weights: Option<(&F32Vec, &F32Vec, &F32Vec, &F32Vec)>
     ) -> Result<BatchnormOp, RuntimeError> {
         if input_tensor.borrow().shape().dims() != output_tensor.borrow().shape().dims() {
             return Err(RuntimeError::Other(String::from("Mismatched shape. Batchnorm can work only with same input and output shapes")))
@@ -63,11 +68,16 @@ impl BatchnormOp {
         ).map_err(|e| {
             RuntimeError::Cudnn(e)
         })?;
-        let scale_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
-        let bias_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
-        let mean_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
-        let var_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
-
+        let mut bias_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
+        let mut scale_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
+        let mut mean_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
+        let mut var_ptr = DevicePtr::new(internal_dtype.clone(), channels)?;
+        if let Some(w) = weights {
+            bias_ptr.load_with_conversion(&w.0)?;
+            scale_ptr.load_with_conversion(&w.1)?;
+            mean_ptr.load_with_conversion(&w.2)?;
+            var_ptr.load_with_conversion(&w.3)?;
+        }
 
         let scales = Scale::new(&data_type, 1., 0.);
         Ok(BatchnormOp{input_tensor, output_tensor,
@@ -85,7 +95,7 @@ impl LayerOp for BatchnormOp {
             let x_desc;
             let x_ptr;
             {   // Allow inplace operations for layer
-                x_desc = self.input_tensor.borrow_mut().desc();
+                x_desc = self.input_tensor.borrow().desc();
                 x_ptr = self.input_tensor.borrow_mut().ptr().borrow().ptr();
             }
             let mut y = self.output_tensor.borrow_mut();
@@ -139,7 +149,8 @@ mod tests {
             inp.clone(),
             inp.clone(),
             &dtype,
-            32
+            32,
+            None
         ).unwrap();
         bn.forward().unwrap();
     

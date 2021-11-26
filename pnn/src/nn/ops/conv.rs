@@ -24,6 +24,7 @@ use std::{
     os::raw::{c_void, c_int}
 };
 
+#[derive(Debug)]
 pub struct ConvolutionOp {
     input_tensor: InputTensor,
     output_tensor: OutputTensor,
@@ -54,11 +55,9 @@ impl ConvolutionOp {
         pad_y: usize,
         pad_x: usize,
         stride_y: usize,
-        stride_x: usize
+        stride_x: usize,
+        weights: Option<&Vec<f32>>
     ) -> Result<ConvolutionOp, RuntimeError> {
-        if data_type != &cudnnDataType::FLOAT {
-            return Err(RuntimeError::Other(String::from("ConvolutionOp support only full fp32 weights. Mixing precision in progress")))
-        }
         // # TODO: Fix descriptor leaks
         let filter_desc = cudnnCreateFilterDescriptor().map_err(|e| {
             RuntimeError::Cudnn(e)
@@ -75,13 +74,20 @@ impl ConvolutionOp {
         })?;
 
         unsafe {
+            let res = pnn_sys::cudnnSetConvolutionMathType(conv_desc, pnn_sys::cudnnMathType_t_CUDNN_TENSOR_OP_MATH);
+            if res != 0 {
+                return Err(RuntimeError::Cudnn(cudnnError::from(res)));
+            }
+        }
+
+        unsafe {
             let n: c_int = 0;
             let c: c_int = 0;
             let h: c_int = 0;
             let w: c_int = 0;
             let ret = pnn_sys::cudnnGetConvolution2dForwardOutputDim(
                 conv_desc,
-                input_tensor.borrow_mut().desc(),
+                input_tensor.borrow().desc(),
                 filter_desc,
                 addr_of!(n) as *mut c_int,
                 addr_of!(c) as *mut c_int,
@@ -93,7 +99,7 @@ impl ConvolutionOp {
             }
             let dims: Vec<usize> = vec![n, c, h, w].iter().map(|x| {*x as usize}).collect();
             let target = output_tensor.borrow().shape();
-            if &dims != target.dims() {
+            if dims != target.dims() {
                 return Err(RuntimeError::Other(format!("Mismatched shape. CUDNN expect {}x{}x{}x{}, passed {}", n, c, h, w, target)))
             }
 
@@ -112,10 +118,10 @@ impl ConvolutionOp {
             let n_results: c_int = 0;
             let ret = cudnnFindConvolutionForwardAlgorithm(
                 *context.as_ref(),
-                input_tensor.borrow_mut().desc(),
+                input_tensor.borrow().desc(),
                 filter_desc,
                 conv_desc,
-                output_tensor.borrow_mut().desc(),
+                output_tensor.borrow().desc(),
                 1, // Query only fastest
                 addr_of!(n_results) as *mut c_int,
                 addr_of!(perf_result) as *mut cudnnConvolutionFwdAlgoPerf_t
@@ -134,10 +140,10 @@ impl ConvolutionOp {
             let workspace_size: usize = 0;
             let ret = cudnnGetConvolutionForwardWorkspaceSize(
                 *context.as_ref(),
-                input_tensor.borrow_mut().desc(),
+                input_tensor.borrow().desc(),
                 filter_desc,
                 conv_desc,
-                output_tensor.borrow_mut().desc(),
+                output_tensor.borrow().desc(),
                 algo,
                 addr_of!(workspace_size) as *mut usize
             );
@@ -147,7 +153,10 @@ impl ConvolutionOp {
             workspace = DevicePtr::new(cudnnDataType::HALF, workspace_size / 2)?;
         }
         let scales = Scale::new(&data_type, 1., 0.);
-        let filter_data = DevicePtr::new(data_type.clone(), input_channels * filters * size_x * size_y)?;
+        let mut filter_data = DevicePtr::new(data_type.clone(), input_channels * filters * size_x * size_y)?;
+        if let Some(w) = weights {
+            filter_data.load_with_conversion(&w)?;
+        }
 
         Ok(ConvolutionOp{input_tensor, output_tensor, context, filter_desc, filter_data, conv_desc, algo, workspace, scales})
     }
@@ -163,7 +172,7 @@ impl LayerOp for ConvolutionOp {
             let x_desc;
             let x_ptr;
             {   // Allow inplace operations for layer
-                x_desc = self.input_tensor.borrow_mut().desc();
+                x_desc = self.input_tensor.borrow().desc();
                 x_ptr = self.input_tensor.borrow_mut().ptr().borrow().ptr();
             }
             let mut y = self.output_tensor.borrow_mut();
@@ -223,7 +232,8 @@ mod tests {
             32, 3,
             3, 3,
             1, 1,
-            1, 1
+            1, 1,
+            None
         ).unwrap();
     
         conv.forward().unwrap();

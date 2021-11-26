@@ -4,13 +4,25 @@ use std::{
     any::Any,
     sync::atomic::{Ordering},
     rc::Rc,
-    convert::TryFrom
+    convert::TryFrom,
+    cell::RefCell
 };
 
 use crate::nn::shape::*;
-use crate::nn::{Layer, LayerType, errors::*, ActivationType};
+use crate::nn::{Layer, LayerType, errors::*, ActivationType, BuildInformation};
 use crate::parsers::{DeserializationError, parse_numerical_field};
+use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
+use crate::nn::ops::{LayerOp, OutputTensor, ConvolutionOp, BatchnormOp, ActivationOp, BiasOp};
 
+type F32Vec = Vec<f32>;
+const FUSE_CONV_BATCHNORM: bool = true;
+
+#[derive(Debug)]
+struct Weights {
+    biases: F32Vec,
+    batchnorm: Option<(F32Vec, F32Vec, F32Vec)>,
+    conv: F32Vec
+}
 
 //Convolution
 #[derive(Debug)]
@@ -31,8 +43,19 @@ pub struct ConvolutionalLayer {
     pad: bool,
     // Paddings size
     padding: usize,
-    // Activation. #TODO: add support of activation :)
-    activation: ActivationType
+    // Activation
+    activation: ActivationType,
+    // List of operations
+    operations: Vec<Box<dyn LayerOp>>,
+    // Can be reusable
+    reusable: bool,
+    // Output tensor
+    tensor: Option<OutputTensor>,
+    // Weights
+    weights: Option<Weights>,
+    // previous channel size
+    prev_c: Option<usize>
+
 }
 
 const SUPPORTED_FIELDS: [&str; 7] = [
@@ -87,6 +110,7 @@ impl Layer for ConvolutionalLayer {
         }
 
         self.shape = Some(Rc::new(LayerShape::from_nchw(n, self.filters, h as usize, w as usize)));
+        self.prev_c = Some(input_shape.C());
         Ok(())
     }
 
@@ -118,13 +142,191 @@ impl Layer for ConvolutionalLayer {
             log::warn!("Not supported darknet field during deserialization of '{}'. Field '{}' not recognized", name, k)
         });
 
-        Ok(Box::new(ConvolutionalLayer{name, shape, filters, batch_normalize, size, stride, pad, padding, activation}))
+        let tensor = None;
+        let operations = vec![];
+        let reusable = false;
+        let weights = None;
+        let prev_c = None;
+
+        Ok(Box::new(ConvolutionalLayer{name, shape, 
+            filters, batch_normalize, 
+            size, stride,
+            pad, padding, 
+            activation, operations,
+            reusable, tensor,
+            weights, prev_c
+        }))
     }
 
     fn layer_type(&self) -> LayerType {
         LayerType::Convolutional
     }
 
+    fn get_build_information(&self) -> BuildInformation {
+        BuildInformation{tensor: self.tensor.as_ref().unwrap().clone(), reusable: self.reusable}
+    }
+
+    fn get_operations(&mut self) -> &mut Vec<Box<dyn LayerOp>> {
+        &mut self.operations
+    }
+
+    fn build(&mut self, 
+        context: Rc<cudnnHandle_t>,
+        data_type: &cudnnDataType,
+        info: Vec<BuildInformation>,
+        has_depend_layers: bool
+    ) -> Result<(), BuildError> {
+        self.reusable = !has_depend_layers;
+
+        let shape = self.shape().unwrap();
+        let input_tensor = info[0].tensor.clone();
+        // Inplace conv not work ;(
+        if shape.as_ref().dims() == input_tensor.borrow().shape().dims() && info[0].reusable && false {
+            self.tensor = Some(input_tensor.clone())
+        } else {
+            let ptr = Rc::new(RefCell::new(
+                DevicePtr::new(data_type.clone(), shape.size()).map_err(|e| {
+                    BuildError::Runtime(e)
+                })?
+            ));
+            let tensor_shape: Box<dyn Shape> = Box::new(LayerShape::new(shape.dims()));
+            let tensor = Rc::new(RefCell::new(
+                Tensor::new(tensor_shape, ptr).map_err(|e| {
+                    BuildError::Runtime(e)
+                })?
+            ));
+
+            self.tensor = Some(tensor);
+        }
+        let t = self.tensor.as_ref().unwrap();
+        let conv_weights = match &self.weights {
+            Some(w) => Some(&w.conv),
+            _ => None
+        };
+        self.operations.push(
+            Box::new(ConvolutionOp::new(
+                context.clone(),
+                input_tensor.clone(),
+                t.clone(),
+                &data_type, 
+                self.filters,
+                self.prev_c.unwrap(),
+                self.size, self.size,
+                self.padding, self.padding,
+                self.stride, self.stride,
+                conv_weights
+            ).map_err(|e| {
+                BuildError::Runtime(e)
+            })?)
+        );
+
+        let biases = &self.weights.as_ref().unwrap().biases;
+        if self.batch_normalize {
+            let mut batch_weights: Option<(&F32Vec, &F32Vec, &F32Vec, &F32Vec)> = None;
+            if conv_weights != None {
+                if let Some(b_weights) = self.weights.as_ref() {
+                    let  b_wghts = b_weights.batchnorm.as_ref().unwrap();
+                    batch_weights = Some((biases, &b_wghts.0, &b_wghts.1, &b_wghts.2));
+                }
+            }
+          
+            self.operations.push(
+                Box::new(BatchnormOp::new(
+                    context.clone(),
+                    t.clone(),
+                    t.clone(),
+                    &data_type, 
+                    self.filters,
+                    batch_weights
+                ).map_err(|e| {
+                    BuildError::Runtime(e)
+                })?)
+            );
+        } else {
+            self.operations.push(
+                Box::new(BiasOp::new(
+                    context.clone(),
+                    t.clone(),
+                    t.clone(),
+                    &data_type,
+                    biases
+                ).map_err(|e| {
+                    BuildError::Runtime(e)
+                })?)
+            );
+        }
+
+        self.operations.push(
+            Box::new(ActivationOp::new(
+                context.clone(), 
+                t.clone(),
+                &data_type, 
+                &self.activation
+            ).map_err(|e| {
+                BuildError::Runtime(e)
+            })?)
+        );
+        Ok(())
+    }
+
+    // let delta: f64 = bn.0[channel] as f64 / ((bn.2[channel] as f64).sqrt() + 0.00001);
+    // let before = biases[channel];
+    // // result is really differ, see darknet
+    // biases[channel] = (biases[channel] as f64 + ((bn.1[channel] as f64) * delta)) as f32;
+
+
+    // Initialize weights using darknet model file. Consume initial offset and return new
+    fn load_darknet_weights(&mut self, offset: usize, bytes: &Vec<u8>) -> Result<usize, BuildError> {
+        use crate::parsers::load_f32_vec;
+        let mut batchnorm = None;
+        let filter_size = self.size * self.size * self.prev_c.ok_or(
+            BuildError::Runtime(RuntimeError::Other(String::from("Network not builded")))
+        )?;
+
+        let (mut biases, mut inner_offset) = load_f32_vec(offset, bytes, self.filters)?;
+        if self.batch_normalize {
+            let (scales, offset) = load_f32_vec(inner_offset, bytes, self.filters)?;
+            let (rolling_mean, offset) = load_f32_vec(offset, bytes, self.filters)?;
+            let (rolling_variance, new_offset) = load_f32_vec(offset, bytes, self.filters)?;
+            inner_offset = new_offset;
+            batchnorm = Some((scales, rolling_mean, rolling_variance));
+        }
+        let (mut conv, offset) = load_f32_vec(inner_offset, bytes, self.filters * filter_size)?;
+
+        if FUSE_CONV_BATCHNORM && self.batch_normalize {
+            self.batch_normalize = false;
+            let bn = batchnorm.unwrap();
+            for channel in 0..self.filters {
+                let delta = bn.0[channel] / (bn.2[channel] + 0.00001).sqrt();
+                biases[channel] -= bn.1[channel] * delta;
+                for i in 0..filter_size {
+                    conv[channel * filter_size + i] *= delta;
+                }
+            }
+            batchnorm = None;
+        }
+        self.weights = Some(Weights{batchnorm, biases, conv});
+
+        Ok(offset)
+    }
+
+    fn forward_debug(&mut self) -> Result<(), RuntimeError> {
+        let mut i = 0;
+        let suffixes = ["conv", "batchnorm", "act"];
+        let name = &self.name();
+        let ptr = self.tensor.as_ref().unwrap().borrow_mut().ptr();
+
+        for op in self.get_operations() {
+            op.forward()?;
+            ptr.borrow().dump(
+                &format!("./debug/activation/{}_{}.bin", name, suffixes[i])
+            ).unwrap();
+            i += 1;
+        }
+        Ok(())
+    }
+
+    
 }
 
 

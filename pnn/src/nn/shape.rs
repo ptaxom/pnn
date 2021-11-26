@@ -19,7 +19,7 @@ pub trait Shape: fmt::Display {
 
     fn concat(&self, other: &dyn Shape, axis: usize) -> Result<Box<dyn Shape> , ShapeError>;
 
-    fn dims(&self) -> &Vec<usize>;
+    fn dims(&self) -> Vec<usize>;
 
     fn as_any(&self) -> &dyn Any;
 
@@ -50,7 +50,8 @@ pub struct LayerShape {
 impl LayerShape {
     pub fn new(dims: Vec<usize>) -> Self{
         assert!(dims.len() > 1 && dims.len() < 5);
-        Self{dims, _size:1} // TODO: Fix it
+        let _size: usize = dims.iter().product::<usize>();
+        Self{dims, _size} // TODO: Fix it
     }
 
     pub fn from_nc(n: usize, c: usize) -> Self {
@@ -90,8 +91,8 @@ impl Shape for LayerShape {
         }
     }
 
-    fn dims(&self) -> &Vec<usize> {
-        &self.dims
+    fn dims(&self) -> Vec<usize> {
+        self.dims.clone()
     }
 
     fn concat(&self, other: &dyn Shape, axis: usize) -> Result<Box<dyn Shape> , ShapeError> {

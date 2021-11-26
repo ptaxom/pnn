@@ -2,12 +2,12 @@
 
 template<typename T>
 __device__ void scale_value(T scale, T *in, T *out, int out_index, int in_index) {
-    out[out_index] += scale * in[in_index];
+    out[out_index] = scale * in[in_index];
 }
 
 template<>
 __device__ void scale_value(half scale, half *in, half *out, int out_index, int in_index) {
-    out[out_index] =  __hadd(__hmul(scale, in[in_index]), out[out_index]);
+    out[out_index] = __hmul(scale, in[in_index]);
 }
 
 

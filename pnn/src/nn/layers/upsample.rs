@@ -3,12 +3,15 @@ use std::{
     self,
     any::Any,
     sync::atomic::{Ordering},
-    rc::Rc
+    rc::Rc,
+    cell::RefCell
 };
 
 use crate::nn::shape::*;
-use crate::nn::{Layer, LayerType, errors::*};
+use crate::nn::{Layer, LayerType, errors::*, BuildInformation};
 use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positive};
+use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
+use crate::nn::ops::{LayerOp, OutputTensor, UpsampleOp};
 
 
 //Nearest neighbor upscale
@@ -20,8 +23,14 @@ pub struct UpsampleLayer {
     shape: Option<Rc<dyn Shape>>,
     // Window stride
     stride: usize,
-    // Window sizeensure_positive
+    // Scale values
     scale: f32,
+    // List of operations
+    operations: Vec<Box<dyn LayerOp>>,
+    // Can be reusable
+    reusable: bool,
+    // Output tensor
+    tensor: Option<OutputTensor>
 }
 
 const SUPPORTED_FIELDS: [&str; 2] = [
@@ -73,6 +82,7 @@ impl Layer for UpsampleLayer {
         let name: String = config.get("name").unwrap_or(&proposed_name).to_string();
         let shape = None;
         let stride = parse_numerical_field::<usize>(&config, "stride", true, None)?.unwrap();
+        // #TODO: add optimisations when stride == 1
         ensure_positive(stride, "stride", "UpsampleLayer")?;
         let scale = parse_numerical_field::<f32>(&config, "scale", false, Some(1.))?.unwrap();
         
@@ -82,11 +92,61 @@ impl Layer for UpsampleLayer {
             log::warn!("Not supported darknet field during deserialization of '{}'. Field '{}' not recognized", name, k)
         });
 
-        Ok(Box::new(UpsampleLayer{name, shape, stride, scale}))
+        let tensor = None;
+        let operations = vec![];
+        let reusable = false;
+
+        Ok(Box::new(UpsampleLayer{name, shape, stride, scale, tensor, operations, reusable}))
     }
 
     fn layer_type(&self) -> LayerType {
         LayerType::Upsample
+    }
+
+    fn get_build_information(&self) -> BuildInformation {
+        BuildInformation{tensor: self.tensor.as_ref().unwrap().clone(), reusable: self.reusable}
+    }
+
+    fn get_operations(&mut self) -> &mut Vec<Box<dyn LayerOp>> {
+        &mut self.operations
+    }
+
+    fn build(&mut self, 
+        context: Rc<cudnnHandle_t>,
+        data_type: &cudnnDataType,
+        info: Vec<BuildInformation>,
+        has_depend_layers: bool
+    ) -> Result<(), BuildError> {
+        self.reusable = !has_depend_layers;
+
+        let shape = self.shape().unwrap();
+        let ptr = Rc::new(RefCell::new(
+            DevicePtr::new(data_type.clone(), shape.size()).map_err(|e| {
+                BuildError::Runtime(e)
+            })?
+        ));
+        let tensor_shape: Box<dyn Shape> = Box::new(LayerShape::new(shape.dims()));
+        let tensor = Rc::new(RefCell::new(
+            Tensor::new(tensor_shape, ptr).map_err(|e| {
+                BuildError::Runtime(e)
+            })?
+        ));
+
+        self.tensor = Some(tensor.clone());
+
+        self.operations.push(
+            Box::new(UpsampleOp::new(
+                context,
+                info[0].tensor.clone(),
+                tensor.clone(),
+                self.stride,
+                self.scale
+            ).map_err(|e| {
+                BuildError::Runtime(e)
+            })?)
+        );
+
+        Ok(())
     }
 
 }

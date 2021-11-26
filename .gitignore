@@ -2,3 +2,4 @@
 /pnn-sys/src/bindings.rs
 *.dot
 /render
+/debug

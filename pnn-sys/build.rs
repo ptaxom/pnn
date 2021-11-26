@@ -19,10 +19,18 @@ fn main() {
         .expect("Couldn't write bindings!");
 
     Build::new()
+        .include("/usr/local/include/opencv4")
         .cuda(true)
         .flag("-cudart=shared")
         .flag("--use_fast_math")
         .flag("-arch=sm_80") // TODO: Add autodiscovery
-        .files(&["./cuda/mish.cu", "./cuda/upsample.cu", "./cuda/utils.cpp"])
-        .compile("kernels.a")
+        .files(&["./cuda/mish.cu", "./cuda/upsample.cu", 
+                 "./cuda/utils.cpp", "./cuda/convert.cu",
+                 "./cuda/blas.cu", "./cuda/demo.cpp"])
+        .compile("kernels.a");
+
+    let opencv_libs = ["imgcodecs", "core", "imgproc", "highgui", "videoio"];
+    for lib in opencv_libs {
+        println!("cargo:rustc-link-lib=opencv_{}", lib);
+    }
 }

@@ -6,6 +6,8 @@ use std::{
 };
 use crate::parsers::*;
 use crate::nn::errors::*;
+use crate::cudnn::{cudnnHandle_t, cudnnCreate, cudnnDataType, cudaDeviceSynchronize};
+use crate::nn::ops::*;
 
 pub type LayerRef = Rc<RefCell<Box<dyn Layer>>>;
 
@@ -22,7 +24,15 @@ pub struct Network {
     // Layer connectivity graph
     adjency_matrix: Vec<Vec<Link>>,
     // Batchsize
-    batchsize: Option<usize>
+    batchsize: Option<usize>,
+    // cudnn context
+    context: Option<Rc<cudnnHandle_t>>,
+    // Input size(height, width)
+    size: (usize, usize),
+    // Yolo heads
+    yolo_heads: Vec<LayerRef>,
+    // prob_thresh, nms_threshold
+    detection_ops: Option<(f32, f32)>
 }
 
 impl Network {
@@ -113,27 +123,58 @@ impl Network {
         Ok(())
     }
 
-    pub fn from_darknet(darknet_cfg: String) -> Result<Self, Box<dyn std::error::Error>> {
-        let config = parse_file(&darknet_cfg)?;
+    fn check_inited(&self) -> Result<(), RuntimeError> {
+        if self.batchsize == None {
+            return Err(RuntimeError::Other(String::from("Batchsize is not setted")))
+        }
+        if self.context == None {
+            return Err(RuntimeError::Other(String::from("Network is not builded")))
+        }
+        Ok(())
+    }
+
+    pub fn from_darknet(darknet_cfg: &String) -> Result<Self, BuildError> {
+        let config = parse_file(darknet_cfg)?;
         if config.len() < 2 {
             return Err(
-                Box::new(DeserializationError(String::from("Network must contain at least input and output layers")))
+                BuildError::Deserialization(DeserializationError(String::from("Network must contain at least input and output layers")))
             )
         }
+        let mut size = (0, 0);
+        let mut yolo_heads = Vec::new();
+
         let mut layers: Vec<LayerRef> = Vec::new();
         let mut n_inputs = 0;
         for layer_cfg in config {
-            let layer = Network::parse_layer(layer_cfg)?;
+            if layer_cfg.get("type").unwrap() == "net" {
+                size = (
+                    parse_numerical_field::<usize>(&layer_cfg, "height", true, None).map_err(|e| {BuildError::Deserialization(e)})?.unwrap(),
+                    parse_numerical_field::<usize>(&layer_cfg, "width", true, None).map_err(|e| {BuildError::Deserialization(e)})?.unwrap(),
+                );
+            }
+            // net should be first in config file, otherwise this code fail
+            if size == (0, 0) {
+                return Err(BuildError::Deserialization(DeserializationError(String::from("Fields height and widht are mandatory"))));
+            }
+
+
+            let layer = Network::parse_layer(layer_cfg).map_err(|e| {
+                BuildError::Deserialization(e)
+            })?;
             let layer = Rc::new(RefCell::new(layer));
             if layer.as_ref().borrow().layer_type() == LayerType::Input {
                 n_inputs += 1;
             }
+            if layer.as_ref().borrow().layer_type() == LayerType::Yolo {
+                yolo_heads.push(layer.clone());
+            }
 
             layers.push(layer.clone());
         }
+
         if n_inputs != 1 {
             return Err(
-                Box::new(DeserializationError(String::from("Supported only exact one input layer")))
+                BuildError::Deserialization(DeserializationError(String::from("Supported only exact one input layer")))
             )
         }
 
@@ -143,10 +184,22 @@ impl Network {
             let mut row: Vec<Link> = Vec::new();
             row.resize(n_layers, Link::None);
         }
-        let batchsize: Option<usize> = None;
-        let mut net = Network{layers, adjency_matrix, batchsize};
-        net.build_adjency_matrix()?;
+        let batchsize = None;
+        let context = None;
+        let detection_ops = None;
+        let mut net = Network{layers, adjency_matrix, batchsize, context, size, yolo_heads, detection_ops};
+        net.build_adjency_matrix().map_err(|e| {
+            BuildError::Deserialization(e)
+        })?;
         Ok(net)
+    }
+
+    pub fn get_detection_ops(&self) -> Option<(f32, f32)> {
+        return self.detection_ops.clone()
+    }
+
+    pub fn set_detections_ops(&mut self, threshold: f32, nms_threshold: f32) {
+        self.detection_ops = Some((threshold, nms_threshold));
     }
 
     pub fn render(&self, dot_path: String) -> Result<(), std::io::Error> {
@@ -199,12 +252,12 @@ impl Network {
 
     pub fn set_batchsize(&mut self, batch: usize) -> Result<(), BuildError> {
         if let Some(_) = self.batchsize {
-            return Err(BuildError::Rebuild)
+            return Err(BuildError::Rebuild(String::from("Batchsize already setted")))
         }
         self.batchsize = Some(batch);
 
         {
-            let mut first_layer_ref = self.layers[0].as_ref().borrow_mut();
+            let mut first_layer_ref = self.layers[0].borrow_mut();
             let input_l = first_layer_ref.as_any_mut().downcast_mut::<InputLayer>().unwrap();
             input_l.set_batchsize(batch);
         }
@@ -213,17 +266,210 @@ impl Network {
             let mut shapes = Vec::new();
             for (col, link) in self.adjency_matrix[i].iter().enumerate() {
                 if *link == Link::Backward {
-                    let shape = self.layers[col].as_ref().borrow().shape().unwrap();
+                    let shape = self.layers[col].borrow().shape().unwrap();
                     shapes.push(shape);
                 }
             }
-            self.layers[i].as_ref().borrow_mut().infer_shape(shapes).map_err(|x| {
+            self.layers[i].borrow_mut().infer_shape(shapes).map_err(|x| {
                 BuildError::DimInferError(x)
             })?;
         }
         Ok(())
     }
+
+    pub fn get_batchsize(&self) -> Option<usize> {
+        self.batchsize.clone()
+    }
+    
+    pub fn build(&mut self, data_type: &cudnnDataType) -> Result<(), BuildError> {
+        if self.batchsize == None {
+            return Err(BuildError::Runtime(RuntimeError::Other(String::from("Batchsize is not setted"))))
+        }
+        if let Some(_) = self.context {
+            return Err(BuildError::Rebuild(String::from("Already builded")))
+        }
+
+        let context = Rc::new(cudnnCreate().map_err(|e| {
+            BuildError::Runtime(RuntimeError::Cudnn(e))
+        })?);
+
+        self.context = Some(context.clone());
+
+        {   // Allocate tensors for first layer
+            let mut first_layer = self.layers[0].borrow_mut();
+            let info = Vec::new();
+            first_layer.build(context.clone(), data_type, info, true)?;
+        }
+
+        for i in 1..self.layers.len() {
+            let has_depend_layers = self.adjency_matrix[i].iter().filter(|l| {
+                l == &&Link::Forward
+            }).count() > 1;
+            let mut build_info = Vec::new();
+            for (col, link) in self.adjency_matrix[i].iter().enumerate() {
+                if *link == Link::Backward {
+                    let info = self.layers[col].as_ref().borrow().get_build_information();
+                    build_info.insert(0, info);
+                }
+            }
+            self.layers[i].borrow_mut().build(context.clone(), data_type, build_info, has_depend_layers)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn forward_debug(&mut self) -> Result<(), RuntimeError> {
+        if self.batchsize == None {
+            return Err(RuntimeError::Other(String::from("Batchsize is not setted")))
+        }
+        if self.context == None {
+            return Err(RuntimeError::Other(String::from("Network not builded")))
+        }
+
+        for i in 0..self.layers.len() {
+            let mut layer = self.layers[i].borrow_mut();
+            layer.forward()?;
+            cudaDeviceSynchronize().map_err(|e| {
+                RuntimeError::Cuda(e)
+            })?;
+
+            let show = true;
+            if show {
+                let ptr = layer.get_build_information().tensor.borrow_mut().ptr();
+                ptr.borrow().dump(&format!("./debug/activation/fused_{}.bin", layer.name()))?;
+
+                let content: Vec<String> = ptr.borrow().download_with_conversion::<f32>()?[..20].iter().map(|x| {(*x).to_string()}).collect();
+                println!("{} Data: [{}]", layer.name(), content.join(" "));
+            }
+        }
+        cudaDeviceSynchronize().map_err(|e| {
+            RuntimeError::Cuda(e)
+        })?;
+
+        Ok(())
+    }
+
+    pub fn forward(&mut self) -> Result<(), RuntimeError> {
+        if self.batchsize == None {
+            return Err(RuntimeError::Other(String::from("Batchsize is not setted")))
+        }
+        if self.context == None {
+            return Err(RuntimeError::Other(String::from("Network not builded")))
+        }
+
+        for i in 0..self.layers.len() {
+            self.layers[i].borrow_mut().forward()?;
+        }
+        cudaDeviceSynchronize().map_err(|e| {
+            RuntimeError::Cuda(e)
+        })?;
+
+        Ok(())
+    }
+
+    pub fn load_darknet_weights(&mut self, path: &String) -> Result<(), BuildError> {
+        use std::io::Read;
+        use std::convert::TryInto;
+        let mut file = std::fs::File::open(path).map_err(|e| {
+            BuildError::Io(e)
+        })?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).map_err(|e| {
+            BuildError::Io(e)
+        })?;
+        // _X variable means, that it not used, just for binary compatibility with darknet
+        let major: i32 = i32::from_ne_bytes(buffer[0..4].try_into().unwrap());
+        let minor: i32 = i32::from_ne_bytes(buffer[4..8].try_into().unwrap());
+        let _revision: i32 = i32::from_ne_bytes(buffer[8..12].try_into().unwrap());
+        let version = major * 10 + minor;
+        
+        let mut offset: usize;
+        
+        let _seen_images: usize;
+        if version >= 2 {
+            offset = 20;
+            _seen_images = usize::from_ne_bytes(buffer[12..20].try_into().unwrap());
+        } else {
+            offset = 16;
+            _seen_images = u32::from_ne_bytes(buffer[12..16].try_into().unwrap()) as usize;
+        }
+        
+        for i in 1..self.layers.len() {
+            offset = self.layers[i].borrow_mut().load_darknet_weights(offset, &buffer)?;
+        }
+        Ok(())
+
+    }
+
+    pub fn load_image(&mut self, image_path: String, batch_id: usize) -> Result<(), RuntimeError> {
+        self.check_inited()?;
+        if batch_id >= self.batchsize.unwrap() {
+            return Err(RuntimeError::Other(String::from("Batch index is greater than network capacity")))
+        }
+        let mut layer = self.layers[0].borrow_mut();
+        let input_layer = layer.as_any_mut().downcast_mut::<InputLayer>().unwrap();
+        let shape = input_layer.shape().unwrap();
+        let width = shape.W().unwrap();
+        let height = shape.H().unwrap();
+
+        let path = std::ffi::CString::new(image_path).unwrap();
+        unsafe {
+            let res = pnn_sys::load_image2batch(
+                path.as_ptr(),
+                batch_id,
+                width, height,
+                input_layer.get_input_tensor().unwrap().borrow_mut().ptr().borrow_mut().ptr() as *mut std::os::raw::c_void
+            );
+            if res == 0 {
+                return Err(RuntimeError::Other(String::from("Couldnt load image")))
+            }
+        }
+        Ok(())
+    }
+
+    pub fn load_bin(&self, bin_path: &String) -> Result<(), RuntimeError>  {
+        self.check_inited()?;
+        let mut layer = self.layers[0].borrow_mut();
+        let input_layer = layer.as_any_mut().downcast_mut::<InputLayer>().unwrap();
+        let ptr = input_layer.get_input_tensor().unwrap().borrow_mut().ptr();
+        ptr.borrow_mut().load_bin(bin_path)?;
+        Ok(())
+    }
+
+    pub fn get_yolo_predictions(&self) -> Result<Vec<Vec<BoundingBox>>, RuntimeError> {
+        self.check_inited()?;
+        let batchsize = self.batchsize.unwrap();
+        let (thresh, iou_tresh) = self.detection_ops.unwrap();
+        let mut predictions: Vec<Vec<BoundingBox>> = Vec::with_capacity(batchsize);
+        predictions.resize_with(batchsize, ||{Vec::new()});
+
+        for l in &self.yolo_heads {
+            let layer = l.borrow();
+            let head: &YoloLayer = layer.as_any().downcast_ref::<YoloLayer>().unwrap();
+            let mut head_predictions = head.get_bboxes(thresh, self.size)?;
+            for batch_id in 0..batchsize {
+                predictions[batch_id].append(&mut head_predictions[batch_id]);
+            }
+        }
+        Ok(predictions.iter().map(|x| {BoundingBox::nms(x, iou_tresh)}).collect())
+    }
+
+    // #TODO: remove it
+    pub fn get_input_ptr(&mut self) -> Result<*mut std::os::raw::c_void , BuildError> {
+        self.check_inited().map_err(|e| {
+            BuildError::Runtime(e)
+        })?;
+        let mut layer = self.layers[0].borrow_mut();
+        let input_layer = layer.as_any_mut().downcast_mut::<InputLayer>().unwrap();
+
+        Ok(input_layer.get_input_tensor().unwrap().borrow_mut().ptr().borrow_mut().ptr() as *mut std::os::raw::c_void)
+    }
+
+    pub fn get_size(&self) -> (usize, usize) {
+        self.size
+    }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -231,7 +477,7 @@ mod tests {
 
     #[test]
     fn load_yolov4_csp() {
-        let net = Network::from_darknet(String::from("../cfgs/tests/yolov4-csp.cfg")).unwrap();
+        let net = Network::from_darknet(&String::from("../cfgs/tests/yolov4-csp.cfg")).unwrap();
         assert_eq!(net.layers.len(), 161);
     }
 }
