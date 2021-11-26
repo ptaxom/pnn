@@ -1,5 +1,32 @@
 use std::os::raw::{c_void, c_int, c_char};
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+#[repr(C)]
+pub struct InferStats {
+    inference_time: f64,
+    inference_with_nms: f64,
+    pub total_time: f64,
+    total_frames: usize,
+}
+
+impl InferStats {
+    pub fn fps(&self) -> f64 {
+        (self.total_frames as f64) / (self.total_time / 1000.)
+    }
+
+    pub fn infer_fps(&self) -> f64 {
+        (self.total_frames as f64) / (self.inference_time / 1000.)
+    }
+
+    pub fn nms_fps(&self) -> f64 {
+        (self.total_frames as f64) / (self.inference_with_nms / 1000.)
+    }
+
+    pub fn total_frames(&self) -> usize {
+        self.total_frames
+    }
+}
+
 extern "C" {
     pub fn activation_mish_fp16(data: *mut c_void, elements: usize, stream: cudaStream_t) -> cudaError_t;
     pub fn activation_mish_fp32(data: *mut c_void, elements: usize, stream: cudaStream_t) -> cudaError_t;
@@ -23,6 +50,6 @@ extern "C" {
         height: usize,
         inp_ptr: *mut c_void,
         model_ptr: *mut c_void,
-        infer_call: extern fn(*mut c_void, *mut usize) -> *mut c_void
-        );
+        infer_call: extern fn(*mut c_void, *mut usize, *mut f64) -> *mut c_void
+        ) -> InferStats;
 }

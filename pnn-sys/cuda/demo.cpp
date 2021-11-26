@@ -4,9 +4,32 @@
 #include <thread>
 #include <condition_variable>
 
+
+
+class Stopwatch {
+public:
+    void tick() {
+        start_ = std::chrono::steady_clock::now();
+    }
+
+    void tack() {
+        end_ = std::chrono::steady_clock::now();
+    }
+
+    double duration() {
+        return std::chrono::duration_cast<std::chrono::microseconds>(end_ - start_).count() / 1000.;
+    }
+
+private:
+    std::chrono::steady_clock::time_point start_;
+    std::chrono::steady_clock::time_point end_;
+};
+
 class DataLoader {
 public:
     virtual cv::Mat* load() = 0;
+    
+    virtual size_t size() = 0;
 };
 
 class VideoLoader: public DataLoader {
@@ -16,6 +39,7 @@ public:
         if (!capture_.read(*frame)) {
             return nullptr;
         }
+        loaded_++;
         return frame;
     }
 
@@ -25,12 +49,17 @@ public:
             throw std::runtime_error("Couldnt open video");
     }
 
+    virtual size_t size(){
+        return loaded_;
+    }
+
     ~VideoLoader() {
         capture_.release();
     }
 
 private:
     cv::VideoCapture capture_;
+    size_t loaded_ = 0;
 };
 
 class DataProcesser {
@@ -70,7 +99,9 @@ public:
 
     T pop() {
         std::unique_lock<std::mutex> lk(mutex_);
-        cv_.wait(lk, [this]{return queue_.size() > 0;});
+        cv_.wait(lk, [this]{return queue_.size() > 0 || poisoned();});
+        if (poisoned()) 
+            throw std::runtime_error("Waiting on poisoned queue");
         T item = queue_.front();
         queue_.pop();
         lk.unlock();
@@ -79,14 +110,21 @@ public:
     }
 
     void poison() {
-        mutex_.lock();
+        std::unique_lock<std::mutex> lk(mutex_);
         poisoned_ = true;
-        mutex_.unlock();
+        lk.unlock();
+        cv_.notify_all();
     }
 
     bool is_poisoned() {
         std::lock_guard<std::mutex> lock(mutex_);
-        return poisoned_ && queue_.size() == 0;
+        return poisoned();
+    }
+
+    bool vis_poisoned() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        printf("%d %d\n", poisoned_, queue_.size());
+        return poisoned();
     }
 
     void set_limit(size_t max_size) {
@@ -114,6 +152,9 @@ public:
     }
 
 private:
+    bool poisoned() {
+        return poisoned_ && queue_.size() == 0;
+    }
     size_t max_size_;
     bool poisoned_;
     std::queue<T> queue_;
@@ -134,7 +175,7 @@ public:
                       size_t height,
                       void* inp_ptr,
                       void* model_ptr,
-                      BoundingBox* (*inference_call)(void* model, size_t *n_boxes)
+                      BoundingBox* (*inference_call)(void* model, size_t *n_boxes, double *infer_time)
                       ): 
         loader_(loader), processer_(processer), batchsize_(batchsize),
         width_(width), height_(height), inp_ptr_(static_cast<float*>(inp_ptr)),
@@ -148,6 +189,7 @@ public:
     }
 
     void start() {
+        total_watcher_.tick();
         load_worker_ = std::thread(&ThreadedProcesser::load_thread, this);
         download_worker_ = std::thread(&ThreadedProcesser::preprocess_thread, this);
         infer_worker_ = std::thread(&ThreadedProcesser::inference_thread, this);
@@ -159,10 +201,20 @@ public:
         download_worker_.join();
         infer_worker_.join();
         processer_worker_.join();
+        total_watcher_.tack();
     }
 
     ~ThreadedProcesser() {
         delete[] n_boxes_;
+    }
+
+    InferStats stats() {
+        InferStats stats;
+        stats.total_frames = loader_->size();
+        stats.inference_time = inference_time_;
+        stats.inference_with_nms = nms_time_;
+        stats.total_time = total_watcher_.duration();
+        return stats;
     }
 
 private:
@@ -212,7 +264,12 @@ private:
             if (loaded_queue_.is_poisoned()) {
                 poisoned = true;
             } else {
-                auto frame = loaded_queue_.pop();
+                cv::Mat *frame;
+                try {
+                    frame = loaded_queue_.pop();
+                } catch (...) {
+                    poisoned = true;
+                }
                 processed.push(
                     std::make_pair(preprocess(frame), frame)
                 );
@@ -247,7 +304,15 @@ private:
        while(true) {
             std::unique_lock<std::mutex> lk(inference_mutex_);
             inference_cv_.wait(lk, [this]{return downloaded_;});
-            BoundingBox* boxes = inference_call_(model_ptr_, n_boxes_);
+            double infer_time;
+            Stopwatch nms_watcher;
+
+            nms_watcher.tick();
+            BoundingBox* boxes = inference_call_(model_ptr_, n_boxes_, &infer_time);
+            nms_watcher.tack();
+
+            inference_time_ += infer_time * 1000.;
+            nms_time_ += nms_watcher.duration();
             
             size_t offset = 0, i = 0;
             while (downloaded_queue_.size()) {
@@ -271,11 +336,18 @@ private:
 
     void process_thread() {
         while (!processed_queue_.is_poisoned()) {
-            auto data = processed_queue_.pop();
+            std::pair<cv::Mat*,std::vector<BoundingBox>> data;
+            try {
+                data = processed_queue_.pop();
+            } catch (...) {
+                exited_ = true;
+                break;
+            }
             exited_ = processer_->postprocess(data.first, data.second);
             delete data.first;
+            if (exited_)
+                break;
         }
-        
     }
 
 private:
@@ -288,7 +360,7 @@ private:
     void* model_ptr_;
 
     size_t *n_boxes_;
-    BoundingBox* (*inference_call_)(void* model, size_t *n_boxes);
+    BoundingBox* (*inference_call_)(void* model, size_t *n_boxes, double *infer_time);
     
     Queue<cv::Mat*> loaded_queue_;
     std::queue<cv::Mat*> downloaded_queue_;
@@ -299,25 +371,29 @@ private:
     bool downloaded_;
     bool preprocess_finished_;
     bool exited_;
+    double inference_time_ = 0., nms_time_ = 0.;
+    Stopwatch total_watcher_;
 
     // ????
     std::thread load_worker_, download_worker_, infer_worker_, processer_worker_;
 };
 
-void visual_demo(const char* video_path, 
+InferStats visual_demo(const char* video_path, 
                  const char** c_classes, 
                  size_t batchsize,
                  size_t width,
                  size_t height,
                  void* inp_ptr,
                  void* model_ptr,
-                 BoundingBox* (*infer_call)(void* model, size_t *n_boxes)
+                 BoundingBox* (*infer_call)(void* model, size_t *n_boxes, double *infer_time)
                  ) {
     DataLoader *loader = new VideoLoader(video_path);
     DataProcesser *processer = new DetectionRenderer(load_classes(c_classes));
     ThreadedProcesser worker(loader, processer, batchsize, width, height, inp_ptr, model_ptr, infer_call);
     worker.start();
     worker.join();
+    auto stats = worker.stats(); 
     delete processer;
     delete loader;
+    return stats;
 }

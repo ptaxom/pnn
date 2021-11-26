@@ -1,13 +1,18 @@
 use crate::nn::{BoundingBox, BuildError, Network};
 use crate::cudnn::cudnnDataType;
 use std::os::raw::{c_void, c_int, c_char};
+use std::time::{Instant};
 extern crate libc;
 use std::mem;
 
-extern "C" fn infer_call(net: *mut c_void,n_boxes: *mut usize) -> *mut c_void {
+extern "C" fn infer_call(net: *mut c_void,n_boxes: *mut usize, infer_time: *mut f64) -> *mut c_void {
     unsafe {
         let network: *mut Network = net as *mut Network;
-        (*network).forward().unwrap();
+        {
+            let now = Instant::now();
+            (*network).forward().unwrap();
+            *infer_time = now.elapsed().as_secs_f64();
+        }
 
         let mut total_boxes: usize = 0;
         let predictions = (*network).get_yolo_predictions().unwrap();
@@ -63,9 +68,10 @@ pub fn demo(video_path: &String,
         println!("Builded yolo");
         net.set_detections_ops(threshold, nms_threshold);
         
+        let stats;
         unsafe {
-            pnn_sys::visual_demo(c_video_path.as_ptr(),
-            ffi_ptrs.as_mut_ptr(),
+            stats = pnn_sys::visual_demo(c_video_path.as_ptr(),
+                ffi_ptrs.as_mut_ptr(),
                 batchsize,
                 net.get_size().1,
                 net.get_size().0,
@@ -74,5 +80,12 @@ pub fn demo(video_path: &String,
                 infer_call
                 );
         }
+    println!("Stats for      {}", video_path);
+    println!("Data type:     {}", data_type);
+    println!("Batchsize:     {}", batchsize);
+    println!("Total frames:  {}", stats.total_frames());
+    println!("FPS:           {}", stats.fps());
+    println!("INF+NMS FPS:   {}", stats.nms_fps());
+    println!("Inference FPS: {}", stats.infer_fps());
     Ok(())
 }

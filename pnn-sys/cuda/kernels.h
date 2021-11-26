@@ -20,6 +20,13 @@ struct BoundingBox{
     float objectness;
 };
 
+struct InferStats {
+    double inference_time;
+    double inference_with_nms;
+    double total_time;
+    size_t total_frames;  
+};
+
 std::vector<std::string> load_classes(const char** c_classes);
 std::vector<BoundingBox> load_bboxes(size_t n_boxes, BoundingBox* const boxes);
 void draw_bboxes(cv::Mat &image, const std::vector<BoundingBox> &bboxes, const std::vector<std::string> &classes);
@@ -42,14 +49,14 @@ extern "C" {
     int load_image2batch(const char* image_path, size_t batch_id, int width, int height, void* input_data);
     int render_bboxes(const char* image_path, size_t n_boxes, void* const boxes, const char** classes, const char* window_name);
 
-    void visual_demo(const char* video_path, 
+    InferStats visual_demo(const char* video_path, 
                  const char** c_classes, 
                  size_t batchsize,
                  size_t width,
                  size_t height,
                  void* inp_ptr,
                  void* model_ptr,
-                 BoundingBox* (*infer_call)(void* model, size_t *n_boxes)
+                 BoundingBox* (*infer_call)(void* model, size_t *n_boxes, double *infer_time)
                  );
 
 }

@@ -570,6 +570,19 @@ pub enum cudnnDataType {
     INT64 = 10
 }
 
+impl fmt::Display for cudnnDataType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match self {
+            cudnnDataType::FLOAT => "FP32",
+            cudnnDataType::HALF => "FP16",
+            cudnnDataType::DOUBLE => "FP64",
+            _ => "Not implemented display for this type"
+        };
+        write!(f, "{}", name)
+    }
+}
+
+
 pub fn cudnnSizeOf(dtype: &cudnnDataType) -> usize {
     match *dtype {
         cudnnDataType::FLOAT => 4,
