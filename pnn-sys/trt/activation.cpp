@@ -184,18 +184,14 @@ const PluginFieldCollection* ActivationCreator::getFieldNames() noexcept
 
 IPluginV2* ActivationCreator::createPlugin(const char* name, const PluginFieldCollection* fc) noexcept
 {
-    CustomActivationType activation;
-    const PluginField* fields = fc->fields;
-
-    assert(fc->nbFields == 1);
-    assert(fields[0].type == PluginFieldType::kINT8);
-    uint8_t act = *(static_cast<const uint8_t*>(fields[0].data)); 
-    activation = static_cast<CustomActivationType>(act);
-
-    return new ActivationPlugin(name, activation);
+    if (strcmp(name, "mish") == 0) {
+        //TODO: Is it necessary??
+        return new ActivationPlugin(name, MISH);
+    }
+    return nullptr;
 }
 
 IPluginV2* ActivationCreator::deserializePlugin(const char* name, const void* serialData, size_t serialLength) noexcept
 {
-    return nullptr;
+    return new ActivationPlugin(name, serialData, serialLength);
 }

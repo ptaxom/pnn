@@ -8,7 +8,7 @@ LIBS=-lnvinfer -lnvinfer_plugin -lcuda -lcudart
 CPP=g++
 CFLAGS=-Wall -I$(INCLUDE_DIR) -L$(LIB_DIR)
 NVCC=nvcc
-src=trt.h activation.hpp main.cpp activation.cpp utils.hpp
+src=trt.h activation.hpp main.cpp activation.cpp utils.hpp builder.hpp builder.cpp
 
 build:
 	@$(NVCC) -c mish.cu --use_fast_math -arch=sm_80 -I$(INCLUDE_DIR) -cudart=shared -lcudart -o mish.o
