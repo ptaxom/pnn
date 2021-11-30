@@ -8,7 +8,7 @@ LIBS=-lnvinfer -lnvinfer_plugin -lcuda -lcudart
 CPP=g++
 CFLAGS=-Wall -I$(INCLUDE_DIR) -L$(LIB_DIR)
 NVCC=nvcc
-src=trt.h activation.hpp main.cpp activation.cpp utils.hpp builder.hpp builder.cpp
+src=trt.h activation.hpp main.cpp activation.cpp utils.hpp builder.hpp builder.cpp utils.cpp engine.cpp engine.hpp
 
 all: build clean
 

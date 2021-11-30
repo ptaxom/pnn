@@ -1,6 +1,10 @@
 #pragma once
 
 #include <iostream>
+#include <sstream>
+#include <memory>
+
+#include <NvInfer.h>
 
 
 #define FatalError(s) {                                                \
@@ -19,18 +23,8 @@
     }                                                                  \
 }
 
-template <typename T>
-void writeToBuffer(char*& buffer, const T& val)
-{
-    *reinterpret_cast<T*>(buffer) = val;
-    buffer += sizeof(T);
-}
+void set_severity(int severity);
 
-template <typename T>
-T readFromBuffer(const char*& buffer)
-{
-    T val = *reinterpret_cast<const T*>(buffer);
-    buffer += sizeof(T);
-    return val;
-}
+std::unique_ptr<nvinfer1::IBuilder> getIBuilder();
 
+std::unique_ptr<nvinfer1::IRuntime> getIRuntime();

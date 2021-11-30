@@ -7,6 +7,23 @@
 
 using namespace nvinfer1;
 
+template <typename T>
+void writeToBuffer(char*& buffer, const T& val)
+{
+    *reinterpret_cast<T*>(buffer) = val;
+    buffer += sizeof(T);
+}
+
+template <typename T>
+T readFromBuffer(const char*& buffer)
+{
+    T val = *reinterpret_cast<const T*>(buffer);
+    buffer += sizeof(T);
+    return val;
+}
+
+
+
 namespace
 {
 const char* ACTIVATION_PLUGIN_VERSION{"1"};
