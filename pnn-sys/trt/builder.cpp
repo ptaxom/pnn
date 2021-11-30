@@ -3,6 +3,7 @@
 #include <mutex>
 #include <map>
 #include <iostream>
+#include <fstream>
 #include <sstream>
 #include <cuda.h>
 
@@ -58,8 +59,8 @@ void set_severity(int severity)
 }
 
 
-TRTBuilder::TRTBuilder(cudnnDataType_t dType) {
-    switch (dType)
+TRTBuilder::TRTBuilder(cudnnDataType_t dataType, int32_t maxBatchsize): mBatchSize(maxBatchsize) {
+    switch (dataType)
     {
     case CUDNN_DATA_INT8:
         mDataType = DataType::kINT8;
@@ -85,6 +86,13 @@ TRTBuilder::TRTBuilder(cudnnDataType_t dType) {
     if (!mBuilder) FatalError("Couldnt creater INetworkDefinition");
 
     mBuilderConfig->setMaxWorkspaceSize(1U << 20);
+
+    mBuilder->setMaxBatchSize(maxBatchsize);
+    if (mDataType == DataType::kHALF) {
+        mBuilderConfig->setFlag(BuilderFlag::kFP16);
+    } else if (mDataType == DataType::kINT8) {
+        mBuilderConfig->setFlag(BuilderFlag::kINT8);
+    }
 }
 
 TRTBuilder::~TRTBuilder() {
@@ -206,7 +214,7 @@ int TRTBuilder::addRoute(const std::vector<size_t> &input_ids) {
 }
 
 int TRTBuilder::addInput(const std::string &name, int32_t channels, int32_t height, int32_t width) {
-    Dims dim{4, {-1, channels, height, width}};
+    Dims dim{4, {mBatchSize, channels, height, width}};
     ITensor* input = mNetworkDefenition->addInput(name.c_str(), mDataType, dim);
     if (!input) return -1;
 
@@ -218,4 +226,48 @@ int TRTBuilder::addInput(const std::string &name, int32_t channels, int32_t heig
 void TRTBuilder::addYolo(size_t input_id) {
     ITensor* tensor = mLayers[input_id]->getOutput(0);
     mNetworkDefenition->markOutput(*tensor);
+}
+
+int TRTBuilder::addPooling(size_t input_id, int32_t stride, int32_t window_size, int32_t padding, bool is_max) {
+    ITensor* tensor = mLayers[input_id]->getOutput(0);
+    if (!tensor) return -1;
+
+    ILayer *layer = mNetworkDefenition->addPoolingNd(*tensor, is_max ? PoolingType::kMAX : PoolingType::kAVERAGE, Dims{2, {window_size, window_size}});
+    if (!layer) return -1;
+
+    IPoolingLayer* pool = dynamic_cast<IPoolingLayer*>(layer);
+    pool->setStrideNd(Dims{4, {1, 1, stride, stride}});
+    pool->setPaddingNd(Dims{4, {1, 1, padding, padding}});
+    return addLayer(pool);
+}
+
+bool TRTBuilder::buildEngine(int32_t avgIters, int32_t minIters, const std::string &engine_path) {
+    // Inputs and outputs should be in NCHW FP32 for compatibility
+    for(int32_t i = 0; i < mNetworkDefenition->getNbInputs(); i++) {
+        auto input = mNetworkDefenition->getInput(i);
+        input->setType(DataType::kFLOAT);
+        input->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
+    }
+    for(int32_t i = 0; i < mNetworkDefenition->getNbOutputs(); i++) {
+        auto output = mNetworkDefenition->getOutput(i);
+        output->setType(DataType::kFLOAT);
+        output->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
+    }
+
+    mBuilderConfig->setMaxWorkspaceSize(1U << 20);
+    mBuilderConfig->setFlag(BuilderFlag::kREFIT);
+    mBuilderConfig->setProfilingVerbosity(ProfilingVerbosity::kLAYER_NAMES_ONLY);
+    mBuilderConfig->setAvgTimingIterations(avgIters);
+    mBuilderConfig->setMinTimingIterations(minIters);
+    
+    IHostMemory* serialized = mBuilder->buildSerializedNetwork(*mNetworkDefenition, *mBuilderConfig);
+
+    if (!serialized) return false;
+
+    std::ofstream engineFile(engine_path, std::ios::binary);
+    if (!engineFile) {
+        std::cerr << "Couldnt open " << engine_path << " for serialization" << std::endl;
+    }
+    engineFile.write(static_cast<char*>(serialized->data()), serialized->size());
+    return !engineFile.fail();
 }

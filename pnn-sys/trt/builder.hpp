@@ -9,7 +9,7 @@ using namespace nvinfer1;
 
 class TRTBuilder {
 public:
-    TRTBuilder(cudnnDataType_t dataType);
+    TRTBuilder(cudnnDataType_t dataType, int32_t maxBatchsize);
 
     ~TRTBuilder();
 
@@ -27,11 +27,16 @@ public:
 
     int addRoute(const std::vector<size_t> &input_ids);
 
+    int addPooling(size_t input_id, int32_t stride, int32_t window_size, int32_t padding, bool is_max);
+
+    bool buildEngine(int32_t avgIters, int32_t minIters, const std::string &engine_path);
+
 private:
     int addLayer(ILayer* layer);
 
 private:
     DataType mDataType;
+    int32_t mBatchSize;
 
     std::unique_ptr<INetworkDefinition> mNetworkDefenition;
     std::unique_ptr<IBuilder> mBuilder;
