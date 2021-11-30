@@ -20,10 +20,6 @@ use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positiv
 use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
 use crate::nn::ops::{LayerOp, OutputTensor, ConvertOp};
 
-// Not used for now
-type RawChannel = (Sender<Vec<f32>>, Receiver<Vec<f32>>);
-type BboxChannel = (Sender<Vec<BoundingBox>>, Receiver<Vec<BoundingBox>>);
-
 //Yolo head layer
 #[derive(Debug)]
 pub struct YoloLayer {
@@ -39,10 +35,6 @@ pub struct YoloLayer {
     reusable: bool,
     // Output tensor
     tensor: Option<OutputTensor>,
-    // Sender to handle predictions
-    data_channel: RawChannel,
-    // Bboxes channel 
-    bbox_channel: BboxChannel,
     // Scale for x,y coords
     scale: f32,
     // Anchors
@@ -127,14 +119,10 @@ impl Layer for YoloLayer {
         let operations = vec![];
         let reusable = false;
 
-        let data_channel = channel();
-        let bbox_channel = channel::<Vec<BoundingBox>>();
-
         Ok(Box::new(YoloLayer{name, shape,
             classes, anchors,
             tensor, operations,
-            reusable, data_channel,
-            bbox_channel, scale
+            reusable, scale
         }))
     }
 
@@ -144,10 +132,6 @@ impl Layer for YoloLayer {
 
     fn get_build_information(&self) -> BuildInformation {
         BuildInformation{tensor: self.tensor.as_ref().unwrap().clone(), reusable: self.reusable}
-    }
-
-    fn get_operations(&mut self) -> &mut Vec<Box<dyn LayerOp>> {
-        &mut self.operations
     }
 
     fn build(&mut self, 
@@ -189,150 +173,8 @@ impl Layer for YoloLayer {
 
 }
 
-fn max(a: f32, b: f32) -> f32 {
-    if a > b {return a} else {return b}
-}
-
-fn min(a: f32, b: f32) -> f32 {
-    if a < b {return a} else {return b}
-}
-
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-#[repr(C)]
-pub struct BoundingBox{
-    x0: f32,
-    y0: f32,
-    x1: f32,
-    y1: f32,
-    class_id: usize,
-    probability: f32,
-    objectness: f32
-}
-
-impl fmt::Display for BoundingBox {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // write!(f, "Bbox [({:.2},{:.2})->({:.2},{:.2})], Class={}", self.x0, self.y0, self.x1, self.y1, self.class_id)
-        write!(f, "[{:.2},{:.2}, {:.2},{:.2}],", self.x0, self.y0, self.x1, self.y1)
-    }
-}
-
-impl BoundingBox {
-    pub fn new(x0: f32,
-            y0: f32,
-            x1: f32,
-            y1: f32,
-            class_id: usize,
-            probability: f32,
-            objectness: f32) -> BoundingBox {
-        BoundingBox{x0, y0, x1, y1, class_id, probability, objectness}
-    }
-    pub fn area(&self) -> f32 {
-        (self.x1 - self.x0) * (self.y1 - self.y0)
-    }
-
-    pub fn iou(&self, other: &BoundingBox) -> f32 {
-        if self.class_id != other.class_id {
-            return 0.
-        }
-
-        let x0 = max(self.x0, other.x0);
-        let y0 = max(self.y0, other.y0);
-        let x1 = min(self.x1, other.x1);
-        let y1 = min(self.y1, other.y1);
-        
-        let w = max(x1 - x0, 0.);
-        let h = max(y1 - y0, 0.);
-        let union_area = w * h;
-        return union_area / (self.area() + other.area() - union_area + 0.000001);
-    }
-
-    pub fn nms(bboxes: &Vec<BoundingBox>, iou_tresh: f32) -> Vec<BoundingBox> {
-        let mut id = 0;
-        let mut boxes = bboxes.clone();
-        boxes.sort_by(|a, b| {
-            b.objectness.partial_cmp(&a.objectness).unwrap()
-        });
-
-        while id < boxes.len() {
-            boxes = boxes.iter().enumerate().filter_map(|(i, b)| {
-                if i <= id || boxes[id].iou(b) < iou_tresh {
-                    return Some((i, b))
-                }
-                None
-            }).map(|s| {*s.1}).collect();
-            id += 1;
-        }
-        boxes
-    }
-
-}
-
-
 impl YoloLayer {
-    pub fn get_bboxes(&self, thresh: f32, net_size: (usize, usize)) -> Result<Vec<Vec<BoundingBox>>, RuntimeError> {
-        let data = self.tensor.as_ref().unwrap().borrow().download::<f32>()?;
-        let mut batch_predictions = Vec::new();
-
-        let shape = self.shape().unwrap();
-        let batch_size = shape.N();
-        let channels = shape.C();
-        let height = shape.H().unwrap();
-        let width = shape.W().unwrap();
-        let delta = -0.5 * (self.scale - 1.);
-        let stride = width * height;
-
-        for batch_id in 0..batch_size {
-            let mut sample_bboxes: Vec<BoundingBox> = Vec::new();
-
-            for head_id in 0..self.anchors.len(){
-                for i in 0..height {
-                    for j in 0..width {
-                        let index: usize = batch_id * channels * height * width +
-                                           head_id * (self.classes + 4 + 1) * height * width +
-                                           i * width +
-                                           j;
-
-                        let objectness = data[index + 4 * stride];
-                        if objectness > thresh {
-                            let x_c = (j as f32 + data[index + 0 * stride] * self.scale + delta) / width  as f32;
-                            let y_c = (i as f32 + data[index + 1 * stride] * self.scale + delta) / height as f32;
-                            
-                            let w = 2. * data[index + 2 * stride];
-                            let w = w * w * self.anchors[head_id].0 as f32 / net_size.1 as f32;
-
-                            let h = 2. * data[index + 3 * stride];
-                            let h = h * h * self.anchors[head_id].1 as f32 / net_size.0 as f32;
-
-                            let x0 = max(x_c - w / 2., 0.);
-                            let y0 = max(y_c - h / 2., 0.);
-                            let x1 = min(x_c + w / 2., 1.);
-                            let y1 = min(y_c + h / 2., 1.);
-
-                            let mut class_id = self.classes + 1;
-                            let mut probability = -1.;
-                            for cls_id in 0..self.classes {
-                                let prob = data[index + (5 + cls_id) * stride] * objectness;
-                                if  prob > thresh && prob > probability {
-                                    probability = prob;
-                                    class_id = cls_id;
-                                }
-                            }
-                            if class_id != self.classes + 1 {
-                                sample_bboxes.push(
-                                    BoundingBox{x0, y0, x1, y1, class_id, objectness, probability}
-                                )
-                            }
-
-
-                        }
-                    }
-                }
-            }
-            batch_predictions.push(sample_bboxes);
-        }
-        Ok(batch_predictions)
-    }
+    
 }
 
 #[cfg(test)]

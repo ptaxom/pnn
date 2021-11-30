@@ -1,0 +1,122 @@
+use crate::cudnn::{cudnnCreate, cudnnHandle_t, cudnnDataType};
+use crate::nn::{DetectionsParser, BoundingBox, RuntimeError, BuildError};
+use crate::cudnn::{DevicePtr};
+use crate::nn::ops::{LayerOp, OutputTensor};
+use crate::nn::Engine;
+
+use std::{
+    rc::Rc,
+    cell::RefCell,
+    collections::HashMap
+};
+
+#[derive(Debug, Clone)]
+pub struct BuildInformation {
+    // Output tensor
+    pub tensor: OutputTensor,
+    // Can be used for next layers both as input and output
+    pub reusable: bool
+}
+
+type Bindings = HashMap<String, DevMemory>;
+type DevMemory = Rc<RefCell<DevicePtr>>;
+
+pub struct CUDNNEngine {
+    // cudnn context for operations execution
+    context: Rc<cudnnHandle_t>,
+    // datatype
+    data_type: cudnnDataType,
+    // Net size, can be usefull for postprocess
+    input_size: (usize, usize),
+    // Batchsize
+    batchsize: usize,
+    // Inference operations
+    ops: Vec<Box<dyn LayerOp>>,
+    // Tensors, needed for linking
+    information: Vec<BuildInformation>,
+    // Inputs
+    inputs: Bindings,
+    // Outputs
+    outputs: Bindings,
+    // Parsers for detections
+    det_parsers: HashMap<String, Box<dyn DetectionsParser>>
+}
+
+impl CUDNNEngine {
+
+    pub fn new(data_type: cudnnDataType, batchsize: usize, input_size: (usize, usize)) -> Result<CUDNNEngine, BuildError> {
+        let context = Rc::new(cudnnCreate().map_err(|e| {
+            BuildError::Runtime(RuntimeError::Cudnn(e))
+        })?);
+        let ops = Vec::new();
+        let information = Vec::new();
+        let inputs = HashMap::new();
+        let outputs = HashMap::new();
+        let det_parsers = HashMap::new();
+
+        Ok(CUDNNEngine{context, batchsize, input_size, data_type, ops, information, inputs, outputs, det_parsers})
+    }
+
+    pub fn get_info(&self, index: usize) -> BuildInformation {
+        self.information[index].clone()
+    }
+
+    pub fn add_layer(&mut self, ops: Vec<Box<dyn LayerOp>>, info: BuildInformation) {
+        let iter = ops.iter();
+        while let Some(op) = iter.next() {
+            self.ops.push(*op);
+        }
+        self.information.push(info);
+    }
+
+    pub fn add_input(&mut self, name: &String, memory: DevMemory) {
+        self.inputs.insert(name.clone(), memory);
+    }
+
+    pub fn add_output(&mut self, name: &String, memory: DevMemory) {
+        self.outputs.insert(name.clone(), memory);
+    }
+
+    pub fn dtype(&self) -> cudnnDataType {
+        self.data_type.clone()
+    }
+
+    pub fn context(&self) -> Rc<cudnnHandle_t> {
+        self.context.clone()
+    }
+
+}
+
+impl Engine for CUDNNEngine {
+
+    fn forward(&mut self) -> Result<(), RuntimeError> {
+        for op in &self.ops {
+            op.forward()?
+        }
+        Ok(())
+    }
+
+    fn input_bindings(&self) -> Bindings {
+        self.inputs.clone()
+    }
+
+    fn output_bindings(&self) -> Bindings {
+        self.outputs.clone()
+    }
+
+    fn add_detections_parser(&mut self, binding_name: &String, parser: Box<dyn DetectionsParser>) {
+        self.det_parsers.insert(binding_name.clone(), parser);
+    }
+
+    fn batchsize(&self) -> usize {
+        self.batchsize
+    }
+
+    fn detection_parsers(&self) -> &HashMap<String, Box<dyn DetectionsParser>> {
+        &self.det_parsers
+    }
+
+    fn dtype(&self) -> cudnnDataType {
+        self.data_type.clone()
+    }
+}

@@ -7,17 +7,10 @@ use std::{
 
 use crate::nn::shape::*;
 use crate::nn::errors::*;
+use crate::nn::{Engine, CUDNNEngine};
 use crate::nn::ops::{LayerOp, OutputTensor};
 use crate::parsers::DeserializationError;
 use crate::cudnn::{cudnnHandle_t, cudnnDataType};
-
-#[derive(Debug)]
-pub struct BuildInformation {
-    // Output tensor
-    pub tensor: OutputTensor,
-    // Can be used for next layers both as input and output
-    reusable: bool
-}
 
 pub trait Layer {
     fn name(&self) -> String;
@@ -36,32 +29,17 @@ pub trait Layer {
 
     fn layer_type(&self) -> LayerType;
 
-    fn input_indices(&self, position: usize) -> Result<Vec<usize>, DeserializationError> {
+    fn input_indices(&self, position: usize) -> Result<Vec<usize>, BuildError> {
         if position == 0 {
-            return Err(DeserializationError(String::from("Couldnt compute input index for first layer")))
+            return Err(BuildError::Deserialization(DeserializationError(String::from("Couldnt compute input index for first layer"))))
         }
         Ok(vec![position - 1])
     }
 
-    fn get_build_information(&self) -> BuildInformation;
 
-    fn get_operations(&mut self) -> &mut Vec<Box<dyn LayerOp>>;
-
-    fn forward(&mut self) -> Result<(), RuntimeError> {
-        for op in self.get_operations() {
-            op.forward()?;
-        }
-        Ok(())
-    }
-
-    fn forward_debug(&mut self) -> Result<(), RuntimeError> {
-        self.forward()
-    }
-
-    fn build(&mut self, 
-        context: Rc<cudnnHandle_t>,
-        data_type: &cudnnDataType,
-        info: Vec<BuildInformation>,
+    fn build_cudnn(&mut self, 
+        engine: &CUDNNEngine,
+        position: usize,
         has_depend_layers: bool
     ) -> Result<(), BuildError>;
 

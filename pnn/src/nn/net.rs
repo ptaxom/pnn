@@ -8,6 +8,7 @@ use crate::parsers::*;
 use crate::nn::errors::*;
 use crate::cudnn::{cudnnHandle_t, cudnnCreate, cudnnDataType, cudaDeviceSynchronize};
 use crate::nn::ops::*;
+use crate::nn::{Engine, CUDNNEngine};
 
 pub type LayerRef = Rc<RefCell<Box<dyn Layer>>>;
 
@@ -25,14 +26,12 @@ pub struct Network {
     adjency_matrix: Vec<Vec<Link>>,
     // Batchsize
     batchsize: Option<usize>,
-    // cudnn context
-    context: Option<Rc<cudnnHandle_t>>,
     // Input size(height, width)
     size: (usize, usize),
-    // Yolo heads
-    yolo_heads: Vec<LayerRef>,
     // prob_thresh, nms_threshold
-    detection_ops: Option<(f32, f32)>
+    detection_ops: Option<(f32, f32)>,
+    // Inference(or train) engine
+    engine: Option<Box<dyn Engine>>
 }
 
 impl Network {
@@ -185,9 +184,9 @@ impl Network {
             row.resize(n_layers, Link::None);
         }
         let batchsize = None;
-        let context = None;
         let detection_ops = None;
-        let mut net = Network{layers, adjency_matrix, batchsize, context, size, yolo_heads, detection_ops};
+        let engine = None;
+        let mut net = Network{layers, adjency_matrix, batchsize, size, detection_ops, engine};
         net.build_adjency_matrix().map_err(|e| {
             BuildError::Deserialization(e)
         })?;
@@ -250,7 +249,7 @@ impl Network {
         Ok(())
     }
 
-    pub fn set_batchsize(&mut self, batch: usize) -> Result<(), BuildError> {
+    fn set_batchsize(&mut self, batch: usize) -> Result<(), BuildError> {
         if let Some(_) = self.batchsize {
             return Err(BuildError::Rebuild(String::from("Batchsize already setted")))
         }
@@ -281,24 +280,17 @@ impl Network {
         self.batchsize.clone()
     }
     
-    pub fn build(&mut self, data_type: &cudnnDataType) -> Result<(), BuildError> {
+    pub fn build_cudnn(&mut self, batchsize: usize, data_type: cudnnDataType) -> Result<(), BuildError> {
         if self.batchsize == None {
             return Err(BuildError::Runtime(RuntimeError::Other(String::from("Batchsize is not setted"))))
         }
-        if let Some(_) = self.context {
-            return Err(BuildError::Rebuild(String::from("Already builded")))
-        }
 
-        let context = Rc::new(cudnnCreate().map_err(|e| {
-            BuildError::Runtime(RuntimeError::Cudnn(e))
-        })?);
-
-        self.context = Some(context.clone());
-
+        let engine = CUDNNEngine::new(data_type.clone(), self.batchsize.unwrap(), self.size)?;
+    
         {   // Allocate tensors for first layer
             let mut first_layer = self.layers[0].borrow_mut();
             let info = Vec::new();
-            first_layer.build(context.clone(), data_type, info, true)?;
+            first_layer.build(&engine, 0, true)?;
         }
 
         for i in 1..self.layers.len() {
@@ -314,6 +306,7 @@ impl Network {
             }
             self.layers[i].borrow_mut().build(context.clone(), data_type, build_info, has_depend_layers)?;
         }
+        self.engine = Some(Box::new(engine));
 
         Ok(())
     }
@@ -436,22 +429,11 @@ impl Network {
         Ok(())
     }
 
-    pub fn get_yolo_predictions(&self) -> Result<Vec<Vec<BoundingBox>>, RuntimeError> {
+    pub fn get_detections(&self) -> Result<Vec<Vec<BoundingBox>>, RuntimeError> {
         self.check_inited()?;
         let batchsize = self.batchsize.unwrap();
         let (thresh, iou_tresh) = self.detection_ops.unwrap();
-        let mut predictions: Vec<Vec<BoundingBox>> = Vec::with_capacity(batchsize);
-        predictions.resize_with(batchsize, ||{Vec::new()});
-
-        for l in &self.yolo_heads {
-            let layer = l.borrow();
-            let head: &YoloLayer = layer.as_any().downcast_ref::<YoloLayer>().unwrap();
-            let mut head_predictions = head.get_bboxes(thresh, self.size)?;
-            for batch_id in 0..batchsize {
-                predictions[batch_id].append(&mut head_predictions[batch_id]);
-            }
-        }
-        Ok(predictions.iter().map(|x| {BoundingBox::nms(x, iou_tresh)}).collect())
+        
     }
 
     // #TODO: remove it
