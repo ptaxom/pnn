@@ -63,6 +63,7 @@ pub fn demo(video_path: &String,
 
         let mut net = crate::nn::Network::from_darknet(config_file)?;
         net.build_cudnn(batchsize, data_type.clone(), Some(weight_path.clone()))?;
+        let i_ptr = net.get_input_ptr().borrow_mut().ptr() as *mut std::os::raw::c_void;
         println!("Builded yolo");
         net.set_detections_ops(threshold, nms_threshold);
         
@@ -73,7 +74,7 @@ pub fn demo(video_path: &String,
                 batchsize,
                 net.get_size().1,
                 net.get_size().0,
-                net.get_input_ptr().borrow_mut().ptr() as *mut std::os::raw::c_void,
+                i_ptr,
                 std::ptr::addr_of!(net) as *mut c_void,
                 infer_call
                 );

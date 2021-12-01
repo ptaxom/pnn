@@ -37,15 +37,14 @@ fn old_main() {
 
 fn main() {
     // #TODO: Check multibatch sync
-    // pnn::cli::demo(
-    //     &String::from("../models/yolo_test.mp4"),
-    //     &String::from("./cfgs/tests/yolov4-csp.cfg"),
-    //     &String::from("../models/yolov4-csp.weights"),
-    //     &String::from("./cfgs/tests/coco.names"),
-    //     &cudnnDataType::FLOAT,
-    //     1,
-    //     0.3,
-    //     0.3
-    // ).unwrap();
-    old_main();
+    pnn::cli::demo(
+        &String::from("../models/yolo_test.mp4"),
+        &String::from("./cfgs/tests/yolov4-csp.cfg"),
+        &String::from("../models/yolov4-csp.weights"),
+        &String::from("./cfgs/tests/coco.names"),
+        &cudnnDataType::FLOAT,
+        1,
+        0.3,
+        0.3
+    ).unwrap();
 }

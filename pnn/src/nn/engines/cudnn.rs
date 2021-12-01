@@ -63,9 +63,7 @@ impl CUDNNEngine {
 
     pub fn add_layer(&mut self, ops: Vec<Box<dyn LayerOp>>, info: BuildInformation) {
         let mut lops = ops;
-        while let Some(op) = lops.pop() {
-            self.ops.push(op);
-        }
+        self.ops.append(&mut lops);
         self.information.push(info);
     }
 
