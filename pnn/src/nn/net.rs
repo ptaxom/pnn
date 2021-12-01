@@ -312,6 +312,40 @@ impl Network {
         Ok(())
     }
 
+    pub fn build_trt(&mut self, batchsize: usize, data_type: cudnnDataType, weights: Option<String>) -> Result<(), BuildError> {
+        if self.batchsize.is_some() || self.engine.is_some() {
+            return Err(BuildError::Runtime(RuntimeError::Other(String::from("Engine is builded"))))
+        }
+        self.set_batchsize(batchsize)?;
+        if let Some(path) = weights {
+            self.load_darknet_weights(&path)?
+        }
+
+        let engine = Rc::new(RefCell::new(CUDNNEngine::new(data_type.clone(), self.batchsize.unwrap(), self.size)?));
+    
+        {   // Allocate tensors for first layer
+            let mut first_layer = self.layers[0].borrow_mut();
+            first_layer.build_cudnn(engine.clone(), vec![], true)?;
+        }
+
+        for i in 1..self.layers.len() {
+            let has_depend_layers = self.adjency_matrix[i].iter().filter(|l| {
+                l == &&Link::Forward
+            }).count() > 1;
+            let mut indeces = Vec::new();
+            for (col, link) in self.adjency_matrix[i].iter().enumerate() {
+                if *link == Link::Backward {
+                    indeces.insert(0, col);
+                }
+            }
+            self.layers[i].borrow_mut().build_cudnn(engine.clone(), indeces, has_depend_layers)?;
+        }
+        self.engine = Some(engine);
+
+        Ok(())
+    }
+
+
     pub fn forward_debug(&mut self) -> Result<(), RuntimeError> {
         panic!("Not implemented after refactoring!");
         // if self.batchsize == None {

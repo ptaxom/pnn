@@ -48,6 +48,8 @@ pub trait Engine {
 
 mod yolo;
 mod cudnn;
+mod trt;
 
 pub use yolo::*;
 pub use cudnn::*;
+pub use trt::*;
