@@ -170,7 +170,7 @@ int TRTBuilder::addInput(const std::string &name, int32_t channels, int32_t heig
 }
 
 
-void TRTBuilder::addYolo(size_t input_id) {
+void TRTBuilder::addYolo(size_t input_id, const std::string &name) {
     ITensor* tensor = mLayers[input_id]->getOutput(0);
     mNetworkDefenition->markOutput(*tensor);
 }

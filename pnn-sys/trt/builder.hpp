@@ -13,7 +13,7 @@ public:
 
     ~TRTBuilder();
 
-    int addConvolution(size_t input_id,  int feature_maps, int kernel_size, Weights kernel, Weights biases);
+    int addConvolution(size_t input_id, int feature_maps, int kernel_size, Weights kernel, Weights biases);
 
     int addActivation(size_t input_id,  const std::string &activation_name);
 
@@ -23,7 +23,7 @@ public:
 
     int addInput(const std::string &name, int32_t channels, int32_t height, int32_t width);
 
-    void addYolo(size_t input_id);
+    void addYolo(size_t input_id, const std::string &name);
 
     int addRoute(const std::vector<size_t> &input_ids);
 

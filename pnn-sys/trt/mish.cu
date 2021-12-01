@@ -5,6 +5,7 @@
 #include <cuda_fp16.h>
 #include <math.h>
 
+namespace {
 const size_t BLOCK_SIZE = 512;
 
 dim3 get_gridsize(size_t elements){
@@ -64,11 +65,12 @@ cudaError_t activation_mish(cudaStream_t stream, size_t elements, const void* in
     );
     return cudaGetLastError();
 }
+}
 
-cudaError_t activation_mish_fp32(cudaStream_t stream, size_t elements, const void* input, void* output) {
+cudaError_t trt_activation_mish_fp32(cudaStream_t stream, size_t elements, const void* input, void* output) {
     return activation_mish<float>(stream, elements, input, output);
 }
 
-cudaError_t activation_mish_fp16(cudaStream_t stream, size_t elements, const void* input, void* output) {
+cudaError_t trt_activation_mish_fp16(cudaStream_t stream, size_t elements, const void* input, void* output) {
     return activation_mish<half>(stream, elements, input, output);
 }

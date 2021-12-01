@@ -24,8 +24,7 @@ T readFromBuffer(const char*& buffer)
 
 
 
-namespace
-{
+namespace {
 const char* ACTIVATION_PLUGIN_VERSION{"1"};
 const char* ACTIVATION_PLUGIN_NAME{"YOLOMishPlugin"};
 }
@@ -39,7 +38,7 @@ REGISTER_TENSORRT_PLUGIN(ActivationCreator);
 ActivationPlugin::ActivationPlugin(const std::string name, CustomActivationType type):
     mLayerName(name),
     mActivation(type),
-    inference_call(&activation_mish_fp32) {
+    inference_call(&trt_activation_mish_fp32) {
 
 }
 
@@ -161,7 +160,7 @@ void ActivationPlugin::configureWithFormat(const Dims* inputs, int nbInputs, con
     }
     mInputVolume = volume;
     if (type == DataType::kHALF) {
-        inference_call = &activation_mish_fp16;
+        inference_call = &trt_activation_mish_fp16;
         std::cout << "Working in FP16 mode(DEBUG)" << std::endl;
     }
 }
