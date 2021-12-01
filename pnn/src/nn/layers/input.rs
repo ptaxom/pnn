@@ -79,22 +79,22 @@ impl Layer for InputLayer {
 
 
     fn build_cudnn(&mut self, 
-        engine: &CUDNNEngine,
-        position: usize,
-        has_depend_layers: bool
+        engine: Rc<RefCell<CUDNNEngine>>,
+        _indeces: Vec<usize>,
+        _: bool
     ) -> Result<(), BuildError> {
         let shape = self.shape().unwrap();
         let itensor = create_otensor(shape.clone(), cudnnDataType::FLOAT)?;
-        let input_tensor = Some(itensor.clone());
-        let data_type = (engine as &dyn Engine).dtype();
+
+        let data_type = engine.borrow().dtype();
         let tensor;
-        let operations: Vec<Box<dyn LayerOp>> = Vec::new();
+        let mut operations: Vec<Box<dyn LayerOp>> = Vec::new();
 
         if data_type != cudnnDataType::FLOAT {
             let otensor = create_otensor(shape.clone(), data_type.clone())?;
             operations.push(
                 Box::new(ConvertOp::new(
-                    engine.context(),
+                    engine.borrow().context(),
                     itensor.clone(),
                     otensor.clone(),
                 ).map_err(|e| {
@@ -104,9 +104,11 @@ impl Layer for InputLayer {
             tensor = otensor;
         }
         else {
-            tensor = itensor;
+            tensor = itensor.clone();
         }
-        engine.add_layer(operations, BuildInformation{tensor, reusable: false});
+        let ptr = itensor.clone().borrow_mut().ptr().clone();
+        engine.borrow_mut().add_input(&self.name(), ptr);
+        engine.borrow_mut().add_layer(operations, BuildInformation{tensor, reusable: false});
         Ok(())
     }
 

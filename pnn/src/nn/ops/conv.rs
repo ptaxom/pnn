@@ -168,6 +168,7 @@ impl LayerOp for ConvolutionOp {
         use pnn_sys::{
             cudnnConvolutionForward
         };
+        println!("--");
         unsafe {
             let x_desc;
             let x_ptr;

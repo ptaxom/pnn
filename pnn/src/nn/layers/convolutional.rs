@@ -153,19 +153,18 @@ impl Layer for ConvolutionalLayer {
         LayerType::Convolutional
     }
 
-
     fn build_cudnn(&mut self, 
-        engine: &CUDNNEngine,
-        position: usize,
+        engine: Rc<RefCell<CUDNNEngine>>,
+        indeces: Vec<usize>,
         has_depend_layers: bool
     ) -> Result<(), BuildError> {
         let reusable = !has_depend_layers;
-        let operations: Vec<Box<dyn LayerOp>> = Vec::new();
-        let mut tensor: OutputTensor;
-        let data_type = engine.dtype();
+        let mut operations: Vec<Box<dyn LayerOp>> = Vec::new();
+        let tensor: OutputTensor;
+        let data_type = engine.borrow().dtype();
 
-        let info: Vec<BuildInformation> = self.input_indices(position)?.iter().map(|x| {
-            engine.get_info(*x)
+        let info: Vec<BuildInformation> = indeces.iter().map(|x| {
+            engine.borrow().get_info(*x)
         }).collect();
 
         let shape = self.shape().unwrap();
@@ -195,7 +194,7 @@ impl Layer for ConvolutionalLayer {
         };
         operations.push(
             Box::new(ConvolutionOp::new(
-                engine.context(),
+                engine.borrow().context(),
                 input_tensor.clone(),
                 tensor.clone(),
                 &data_type, 
@@ -222,7 +221,7 @@ impl Layer for ConvolutionalLayer {
           
             operations.push(
                 Box::new(BatchnormOp::new(
-                    engine.context(),
+                    engine.borrow().context(),
                     tensor.clone(),
                     tensor.clone(),
                     &data_type, 
@@ -235,7 +234,7 @@ impl Layer for ConvolutionalLayer {
         } else {
             operations.push(
                 Box::new(BiasOp::new(
-                    engine.context(),
+                    engine.borrow().context(),
                     tensor.clone(),
                     tensor.clone(),
                     &data_type,
@@ -248,7 +247,7 @@ impl Layer for ConvolutionalLayer {
 
         operations.push(
             Box::new(ActivationOp::new(
-                engine.context(), 
+                engine.borrow().context(), 
                 tensor.clone(),
                 &data_type, 
                 &self.activation
@@ -256,6 +255,7 @@ impl Layer for ConvolutionalLayer {
                 BuildError::Runtime(e)
             })?)
         );
+        engine.borrow_mut().add_layer(operations, BuildInformation{tensor, reusable});
         Ok(())
     }
 

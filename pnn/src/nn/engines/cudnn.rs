@@ -62,9 +62,9 @@ impl CUDNNEngine {
     }
 
     pub fn add_layer(&mut self, ops: Vec<Box<dyn LayerOp>>, info: BuildInformation) {
-        let iter = ops.iter();
-        while let Some(op) = iter.next() {
-            self.ops.push(*op);
+        let mut lops = ops;
+        while let Some(op) = lops.pop() {
+            self.ops.push(op);
         }
         self.information.push(info);
     }
@@ -85,12 +85,16 @@ impl CUDNNEngine {
         self.context.clone()
     }
 
+    pub fn input_size(&self) -> (usize, usize) {
+        self.input_size
+    }
+
 }
 
 impl Engine for CUDNNEngine {
 
     fn forward(&mut self) -> Result<(), RuntimeError> {
-        for op in &self.ops {
+        for op in &mut self.ops {
             op.forward()?
         }
         Ok(())

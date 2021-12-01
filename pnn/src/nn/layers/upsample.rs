@@ -12,6 +12,7 @@ use crate::nn::{Layer, LayerType, errors::*, BuildInformation};
 use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positive};
 use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
 use crate::nn::ops::{LayerOp, OutputTensor, UpsampleOp};
+use crate::nn::{CUDNNEngine, Engine};
 
 
 //Nearest neighbor upscale
@@ -24,13 +25,7 @@ pub struct UpsampleLayer {
     // Window stride
     stride: usize,
     // Scale values
-    scale: f32,
-    // List of operations
-    operations: Vec<Box<dyn LayerOp>>,
-    // Can be reusable
-    reusable: bool,
-    // Output tensor
-    tensor: Option<OutputTensor>
+    scale: f32
 }
 
 const SUPPORTED_FIELDS: [&str; 2] = [
@@ -92,32 +87,24 @@ impl Layer for UpsampleLayer {
             log::warn!("Not supported darknet field during deserialization of '{}'. Field '{}' not recognized", name, k)
         });
 
-        let tensor = None;
-        let operations = vec![];
-        let reusable = false;
-
-        Ok(Box::new(UpsampleLayer{name, shape, stride, scale, tensor, operations, reusable}))
+        Ok(Box::new(UpsampleLayer{name, shape, stride, scale}))
     }
 
     fn layer_type(&self) -> LayerType {
         LayerType::Upsample
     }
 
-    fn get_build_information(&self) -> BuildInformation {
-        BuildInformation{tensor: self.tensor.as_ref().unwrap().clone(), reusable: self.reusable}
-    }
-
-    fn get_operations(&mut self) -> &mut Vec<Box<dyn LayerOp>> {
-        &mut self.operations
-    }
-
-    fn build(&mut self, 
-        context: Rc<cudnnHandle_t>,
-        data_type: &cudnnDataType,
-        info: Vec<BuildInformation>,
+    fn build_cudnn(&mut self, 
+        engine: Rc<RefCell<CUDNNEngine>>,
+        indeces: Vec<usize>,
         has_depend_layers: bool
     ) -> Result<(), BuildError> {
-        self.reusable = !has_depend_layers;
+        let reusable = !has_depend_layers;
+        let info: Vec<BuildInformation> = indeces.iter().map(|x| {
+            engine.borrow().get_info(*x)
+        }).collect();
+        let data_type = engine.borrow().dtype();
+        let mut operations: Vec<Box<dyn LayerOp>> = Vec::new();
 
         let shape = self.shape().unwrap();
         let ptr = Rc::new(RefCell::new(
@@ -132,11 +119,10 @@ impl Layer for UpsampleLayer {
             })?
         ));
 
-        self.tensor = Some(tensor.clone());
 
-        self.operations.push(
+        operations.push(
             Box::new(UpsampleOp::new(
-                context,
+                engine.borrow().context(),
                 info[0].tensor.clone(),
                 tensor.clone(),
                 self.stride,
@@ -145,6 +131,7 @@ impl Layer for UpsampleLayer {
                 BuildError::Runtime(e)
             })?)
         );
+        engine.borrow_mut().add_layer(operations, BuildInformation{tensor, reusable});
 
         Ok(())
     }

@@ -6,7 +6,7 @@ use std::{
     cell::RefCell
 };
 
-struct YoloHeadParser {
+pub struct YoloHeadParser {
     height: usize,
     width: usize,
     channels: usize,
@@ -17,6 +17,19 @@ struct YoloHeadParser {
 
     binding: Rc<RefCell<DevicePtr>>
 
+}
+
+impl YoloHeadParser {
+    pub fn new(height: usize,
+        width: usize,
+        channels: usize,
+        batchsize: usize,
+        n_classes: usize,
+        scale: f32,
+        anchors: Vec<(f32, f32)>,
+        binding: Rc<RefCell<DevicePtr>>) -> YoloHeadParser {
+            YoloHeadParser{width, height, batchsize, n_classes, scale, anchors, binding, channels}
+        }
 }
 
 fn max(a: f32, b: f32) -> f32 {
@@ -74,7 +87,7 @@ impl DetectionsParser for YoloHeadParser {
                             }
                             if class_id != self.n_classes + 1 {
                                 sample_bboxes.push(
-                                    BoundingBox{x0, y0, x1, y1, class_id, objectness, probability}
+                                    BoundingBox::new(x0, y0, x1, y1, class_id, objectness, probability)
                                 )
                             }
                         }

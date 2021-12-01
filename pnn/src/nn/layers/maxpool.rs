@@ -12,6 +12,7 @@ use crate::nn::{Layer, LayerType, errors::*, BuildInformation};
 use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positive};
 use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
 use crate::nn::ops::{LayerOp, OutputTensor, PoolingOp};
+use crate::nn::{CUDNNEngine, Engine};
 
 
 //Maxpool
@@ -26,13 +27,7 @@ pub struct MaxpoolLayer {
     // Window sizeensure_positive
     size: usize,
     // Padding size
-    padding: usize,
-    // List of operations
-    operations: Vec<Box<dyn LayerOp>>,
-    // Can be reusable
-    reusable: bool,
-    // Output tensor
-    tensor: Option<OutputTensor>
+    padding: usize
 }
 
 const SUPPORTED_FIELDS: [&str; 3] = [
@@ -102,11 +97,7 @@ impl Layer for MaxpoolLayer {
             log::warn!("Not supported darknet field during deserialization of '{}'. Field '{}' not recognized", name, k)
         });
 
-        let tensor = None;
-        let operations = vec![];
-        let reusable = false;
-
-        Ok(Box::new(MaxpoolLayer{name, shape, stride, size, padding, tensor, operations, reusable}))
+        Ok(Box::new(MaxpoolLayer{name, shape, stride, size, padding}))
     }
 
 
@@ -114,26 +105,23 @@ impl Layer for MaxpoolLayer {
         LayerType::Maxpool
     }
 
-    fn get_build_information(&self) -> BuildInformation {
-        BuildInformation{tensor: self.tensor.as_ref().unwrap().clone(), reusable: self.reusable}
-    }
-
-    fn get_operations(&mut self) -> &mut Vec<Box<dyn LayerOp>> {
-        &mut self.operations
-    }
-
-    fn build(&mut self, 
-        context: Rc<cudnnHandle_t>,
-        data_type: &cudnnDataType,
-        info: Vec<BuildInformation>,
+    fn build_cudnn(&mut self, 
+        engine: Rc<RefCell<CUDNNEngine>>,
+        indeces: Vec<usize>,
         has_depend_layers: bool
     ) -> Result<(), BuildError> {
-        self.reusable = !has_depend_layers;
+        let reusable = !has_depend_layers;
+        let info: Vec<BuildInformation> = indeces.iter().map(|x| {
+            engine.borrow().get_info(*x)
+        }).collect();
+        let mut tensor;
+        let data_type = engine.borrow().dtype();
+        let mut operations: Vec<Box<dyn LayerOp>> = Vec::new();
 
         let shape = self.shape().unwrap();
         let input_tensor = info[0].tensor.clone();
         if shape.as_ref().dims() == input_tensor.borrow().shape().dims() && info[0].reusable {
-            self.tensor = Some(input_tensor.clone())
+            tensor = input_tensor.clone()
         } else {
             let ptr = Rc::new(RefCell::new(
                 DevicePtr::new(data_type.clone(), shape.size()).map_err(|e| {
@@ -141,21 +129,18 @@ impl Layer for MaxpoolLayer {
                 })?
             ));
             let tensor_shape: Box<dyn Shape> = Box::new(LayerShape::new(shape.dims()));
-            let tensor = Rc::new(RefCell::new(
+            tensor = Rc::new(RefCell::new(
                 Tensor::new(tensor_shape, ptr).map_err(|e| {
                     BuildError::Runtime(e)
                 })?
             ));
-
-            self.tensor = Some(tensor);
         }
-        let t = self.tensor.as_ref().unwrap().clone();
 
-        self.operations.push(
+        operations.push(
             Box::new(PoolingOp::new(
-                context,
+                engine.borrow().context(),
                 input_tensor.clone(),
-                t.clone(),
+                tensor.clone(),
                 &data_type, 
                 true,
                 self.stride, self.stride,
@@ -165,7 +150,7 @@ impl Layer for MaxpoolLayer {
                 BuildError::Runtime(e)
             })?)
         );
-
+        engine.borrow_mut().add_layer(operations, BuildInformation{tensor, reusable});
         Ok(())
     }
 }

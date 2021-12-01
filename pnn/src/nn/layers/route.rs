@@ -11,6 +11,7 @@ use crate::nn::shape::*;
 use crate::nn::{Layer, LayerType, errors::*, BuildInformation};
 use crate::parsers::{DeserializationError, parse_list_field};
 use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
+use crate::nn::{CUDNNEngine, Engine};
 use crate::nn::ops::{LayerOp, OutputTensor, InputTensor, RouteOp};
 
 
@@ -23,12 +24,6 @@ pub struct RouteLayer {
     shape: Option<Rc<dyn Shape>>,
     // Offsets to previous layers
     layers: Vec<i32>,
-    // List of operations
-    operations: Vec<Box<dyn LayerOp>>,
-    // Can be reusable
-    reusable: bool,
-    // Output tensor
-    tensor: Option<OutputTensor>
 }
 
 const SUPPORTED_FIELDS: [&str; 1] = [
@@ -82,48 +77,40 @@ impl Layer for RouteLayer {
         }).map(|k| {
             log::warn!("Not supported darknet field during deserialization of '{}'. Field '{}' not recognized", name, k)
         });
-        
-        let tensor = None;
-        let operations = vec![];
-        let reusable = false;
 
-        Ok(Box::new(RouteLayer{name, shape, layers, tensor, operations, reusable}))
+        Ok(Box::new(RouteLayer{name, shape, layers}))
     }
 
     fn layer_type(&self) -> LayerType {
         LayerType::Route
     }
 
-    fn input_indices(&self, position: usize) -> Result<Vec<usize>, DeserializationError> {
+    fn input_indices(&self, position: usize) -> Result<Vec<usize>, BuildError> {
         if position == 0 {
-            return Err(DeserializationError(String::from("Couldnt compute input index for first layer")))
+            return Err(BuildError::Deserialization(DeserializationError(String::from("Couldnt compute input index for first layer"))))
         }
-        let indeces: Result<Vec<usize>, DeserializationError> = self.layers.iter().map(|x| {
+        let indeces: Result<Vec<usize>, BuildError> = self.layers.iter().map(|x| {
             // -1 to compensate input layer during absolute index. # TODO: fix it
             let index: i32 = if *x > 0i32 {*x + 1} else {position as i32 + *x};
             if index >= position as i32 || index < 0 {
-                return Err(DeserializationError(format!("Couldnt reffer to {} from '{}'", index, self.name)))
+                return Err(BuildError::Deserialization(DeserializationError(format!("Couldnt reffer to {} from '{}'", index, self.name))))
             }
             Ok(index as usize)
         }).collect();
         indeces
     }
 
-    fn get_build_information(&self) -> BuildInformation {
-        BuildInformation{tensor: self.tensor.as_ref().unwrap().clone(), reusable: self.reusable}
-    }
-
-    fn get_operations(&mut self) -> &mut Vec<Box<dyn LayerOp>> {
-        &mut self.operations
-    }
-
-    fn build(&mut self, 
-        context: Rc<cudnnHandle_t>,
-        data_type: &cudnnDataType,
-        info: Vec<BuildInformation>,
+    fn build_cudnn(&mut self, 
+        engine: Rc<RefCell<CUDNNEngine>>,
+        indeces: Vec<usize>,
         has_depend_layers: bool
     ) -> Result<(), BuildError> {
-        self.reusable = !has_depend_layers;
+        let reusable = !has_depend_layers;
+        let info: Vec<BuildInformation> = indeces.iter().map(|x| {
+            engine.borrow().get_info(*x)
+        }).collect();
+        let data_type = engine.borrow().dtype();
+        let mut operations: Vec<Box<dyn LayerOp>> = Vec::new();
 
         let shape = self.shape().unwrap();
         let ptr = Rc::new(RefCell::new(
@@ -138,11 +125,10 @@ impl Layer for RouteLayer {
             })?
         ));
 
-        self.tensor = Some(tensor.clone());
 
-        self.operations.push(
+        operations.push(
             Box::new(RouteOp::new(
-                context,
+                engine.borrow().context(),
                 info.iter().map(|i| {
                     i.tensor.clone()
                 }).collect::<Vec<InputTensor>>(),
@@ -151,7 +137,7 @@ impl Layer for RouteLayer {
                 BuildError::Runtime(e)
             })?)
         );
-
+        engine.borrow_mut().add_layer(operations, BuildInformation{tensor, reusable});
         Ok(())
     }
 

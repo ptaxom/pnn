@@ -2,12 +2,13 @@ use std::{
     collections::HashMap,
     self,
     any::Any,
-    rc::Rc
+    rc::Rc,
+    cell::RefCell
 };
 
 use crate::nn::shape::*;
 use crate::nn::errors::*;
-use crate::nn::{Engine, CUDNNEngine};
+use crate::nn::{Engine, CUDNNEngine, BuildInformation};
 use crate::nn::ops::{LayerOp, OutputTensor};
 use crate::parsers::DeserializationError;
 use crate::cudnn::{cudnnHandle_t, cudnnDataType};
@@ -38,8 +39,8 @@ pub trait Layer {
 
 
     fn build_cudnn(&mut self, 
-        engine: &CUDNNEngine,
-        position: usize,
+        engine: Rc<RefCell<CUDNNEngine>>,
+        indeces: Vec<usize>,
         has_depend_layers: bool
     ) -> Result<(), BuildError>;
 
