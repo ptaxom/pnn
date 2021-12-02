@@ -13,7 +13,7 @@ use crate::nn::{Layer, LayerType, errors::*, ActivationType, BuildInformation};
 use crate::parsers::{DeserializationError, parse_numerical_field};
 use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
 use crate::nn::ops::{LayerOp, OutputTensor, ConvolutionOp, BatchnormOp, ActivationOp, BiasOp};
-use crate::nn::{CUDNNEngine, Engine};
+use crate::nn::{CUDNNEngine, Engine, TRTBuilder};
 
 type F32Vec = Vec<f32>;
 const FUSE_CONV_BATCHNORM: bool = true;
@@ -256,6 +256,27 @@ impl Layer for ConvolutionalLayer {
             })?)
         );
         engine.borrow_mut().add_layer(operations, BuildInformation{tensor, reusable});
+        Ok(())
+    }
+
+    fn build_trt(&mut self, 
+        engine: Rc<RefCell<TRTBuilder>>,
+        indeces: Vec<usize>
+    ) -> Result<(), BuildError> {
+
+        if self.weights.is_none() || !FUSE_CONV_BATCHNORM {
+            return Err(BuildError::Runtime(RuntimeError::Other(String::from("For TRTEngine convolution layer shoud have weights and use FUSED_CONV_BATCHNORM"))))
+        }
+        let mut engine = engine.borrow_mut();
+
+        let mut id: usize = engine.last_op_id(indeces[0]);
+
+        let kernels = &self.weights.as_ref().unwrap().conv;
+        let biases  = &self.weights.as_ref().unwrap().biases;
+        
+        id = engine.add_convolution(id, self.filters, self.prev_c.unwrap(), self.size, self.padding, self.stride, kernels, biases)?;
+        id = engine.add_activation(id, self.activation.clone())?;
+        engine.finilize_layer(id);
         Ok(())
     }
 

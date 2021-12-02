@@ -11,7 +11,7 @@ use crate::nn::shape::*;
 use crate::nn::{Layer, LayerType, errors::*, BuildInformation};
 use crate::parsers::{DeserializationError, parse_numerical_field};
 use crate::nn::ops::{LayerOp, OutputTensor, InputTensor, create_otensor, ConvertOp};
-use crate::nn::{CUDNNEngine, Engine};
+use crate::nn::{CUDNNEngine, TRTBuilder};
 use crate::cudnn::{cudnnHandle_t, cudnnDataType};
 
 
@@ -76,8 +76,6 @@ impl Layer for InputLayer {
         LayerType::Input
     }
 
-
-
     fn build_cudnn(&mut self, 
         engine: Rc<RefCell<CUDNNEngine>>,
         _indeces: Vec<usize>,
@@ -112,6 +110,16 @@ impl Layer for InputLayer {
         Ok(())
     }
 
+    fn build_trt(&mut self, 
+        engine: Rc<RefCell<TRTBuilder>>,
+        indeces: Vec<usize>
+    ) -> Result<(), BuildError> {
+        engine.borrow_mut().add_input(
+            &self.name(),
+            self.shape().unwrap()
+        )?;
+        Ok(())
+    }
 }
 
 impl InputLayer {

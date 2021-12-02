@@ -28,3 +28,5 @@ void set_severity(int severity);
 std::unique_ptr<nvinfer1::IBuilder> getIBuilder();
 
 std::unique_ptr<nvinfer1::IRuntime> getIRuntime();
+
+void init_plugins();

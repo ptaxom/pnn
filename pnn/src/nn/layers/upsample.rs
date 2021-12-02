@@ -12,7 +12,7 @@ use crate::nn::{Layer, LayerType, errors::*, BuildInformation};
 use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positive};
 use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
 use crate::nn::ops::{LayerOp, OutputTensor, UpsampleOp};
-use crate::nn::{CUDNNEngine, Engine};
+use crate::nn::{CUDNNEngine, TRTBuilder};
 
 
 //Nearest neighbor upscale
@@ -133,6 +133,20 @@ impl Layer for UpsampleLayer {
         );
         engine.borrow_mut().add_layer(operations, BuildInformation{tensor, reusable});
 
+        Ok(())
+    }
+
+    fn build_trt(&mut self, 
+        engine: Rc<RefCell<TRTBuilder>>,
+        indeces: Vec<usize>
+    ) -> Result<(), BuildError> {
+        if self.scale != 1. {
+            return Err(BuildError::Runtime(RuntimeError::Other(String::from("For TRTEngine Upsample supported only scale == 1."))))
+        }
+        let mut engine = engine.borrow_mut();
+        let mut id: usize = engine.last_op_id(indeces[0]);
+        id = engine.add_upsample(id, self.stride)?;
+        engine.finilize_layer(id);
         Ok(())
     }
 

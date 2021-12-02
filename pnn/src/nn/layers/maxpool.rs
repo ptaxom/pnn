@@ -12,7 +12,7 @@ use crate::nn::{Layer, LayerType, errors::*, BuildInformation};
 use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positive};
 use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
 use crate::nn::ops::{LayerOp, OutputTensor, PoolingOp};
-use crate::nn::{CUDNNEngine, Engine};
+use crate::nn::{CUDNNEngine, TRTBuilder};
 
 
 //Maxpool
@@ -151,6 +151,23 @@ impl Layer for MaxpoolLayer {
             })?)
         );
         engine.borrow_mut().add_layer(operations, BuildInformation{tensor, reusable});
+        Ok(())
+    }
+
+    fn build_trt(&mut self, 
+        engine: Rc<RefCell<TRTBuilder>>,
+        indeces: Vec<usize>
+    ) -> Result<(), BuildError> {
+        let mut engine = engine.borrow_mut();
+        let mut id: usize = engine.last_op_id(indeces[0]);
+        id = engine.add_pooling(
+            id,
+            self.stride,
+            self.size,
+            self.padding,
+            true
+        )?;
+        engine.finilize_layer(id);
         Ok(())
     }
 }

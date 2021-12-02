@@ -62,7 +62,8 @@ pub fn demo(video_path: &String,
         ffi_ptrs.push(std::ptr::null());
 
         let mut net = crate::nn::Network::from_darknet(config_file)?;
-        net.build_cudnn(batchsize, data_type.clone(), Some(weight_path.clone()))?;
+        // net.build_cudnn(batchsize, data_type.clone(), Some(weight_path.clone()))?;
+        net.build_trt(batchsize, data_type.clone(), weight_path, Some(String::from("yolo.engine")))?;
         let i_ptr = net.get_input_ptr().borrow_mut().ptr() as *mut std::os::raw::c_void;
         println!("Builded yolo");
         net.set_detections_ops(threshold, nms_threshold);

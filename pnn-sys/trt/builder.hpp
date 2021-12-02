@@ -2,6 +2,7 @@
 
 #include <cudnn.h>
 #include <memory>
+#include <map>
 
 #include "activation.hpp"
 
@@ -13,7 +14,7 @@ public:
 
     ~TRTBuilder();
 
-    int addConvolution(size_t input_id, int feature_maps, int kernel_size, Weights kernel, Weights biases);
+    int addConvolution(size_t input_id, int feature_maps, int kernel_size, int padding, int stride, Weights kernel, Weights biases);
 
     int addActivation(size_t input_id,  const std::string &activation_name);
 
@@ -32,6 +33,8 @@ public:
     bool buildEngine(int32_t avgIters, int32_t minIters, const std::string &engine_path);
 
 private:
+    void setLayerName(ILayer* layer, const std::string &prefix);
+
     int addLayer(ILayer* layer);
 
 private:
@@ -45,5 +48,6 @@ private:
 
     // I think this pointers are owner by mNetworkDefenetion, but need double-check
     std::vector<ILayer*> mLayers;
+    std::map<std::string, size_t> mCounter;
 
 };

@@ -19,7 +19,7 @@ use crate::nn::{Layer, LayerType, errors::*, BuildInformation, DetectionsParser,
 use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positive, parse_list_field};
 use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
 use crate::nn::ops::{LayerOp, OutputTensor, ConvertOp};
-use crate::nn::{CUDNNEngine, Engine};
+use crate::nn::{CUDNNEngine, TRTBuilder, Engine};
 
 //Yolo head layer
 #[derive(Debug)]
@@ -165,6 +165,18 @@ impl Layer for YoloLayer {
         let inp_size = engine.borrow().input_size();
         engine.borrow_mut().add_detections_parser(&name, self.get_parser(inp_size, ptr.clone()));
 
+        Ok(())
+    }
+
+    fn build_trt(&mut self, 
+        engine: Rc<RefCell<TRTBuilder>>,
+        indeces: Vec<usize>
+    ) -> Result<(), BuildError> {
+        let mut engine = engine.borrow_mut();
+        let id: usize = engine.last_op_id(indeces[0]);
+        engine.add_yolo(id, &self.name())?;
+        // TODO: check it
+        engine.finilize_layer(usize::MAX);
         Ok(())
     }
 

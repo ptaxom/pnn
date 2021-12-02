@@ -8,7 +8,16 @@ extern "C" {
 
     void  builder_destroy(void* builder);
 
-    int   builder_add_convolution(void* builder, size_t input_id, size_t feature_maps, size_t input_c, size_t kernel_size, float* kernel, float* biases);
+    int   builder_add_convolution(void* builder,
+        size_t input_id, 
+        size_t feature_maps,
+        size_t input_c, 
+        size_t kernel_size, 
+        size_t padding, 
+        size_t stride,
+        float* kernel,
+        float* biases
+    );
 
     int   builder_add_activation(void* builder, size_t input_id, const char* act_name);
 

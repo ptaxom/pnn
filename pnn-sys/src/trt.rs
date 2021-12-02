@@ -9,6 +9,8 @@ extern "C" {
         feature_maps: usize,
         input_c: usize,
         kernel_size: usize,
+        padding: usize,
+        stride: usize,
         kernels: *const f32,
         biases: *const f32
     ) -> c_int;

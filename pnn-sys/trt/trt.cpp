@@ -12,11 +12,20 @@ void builder_destroy(void* builder) {
 }
 
 
-int builder_add_convolution(void* builder, size_t input_id, size_t feature_maps, size_t input_c, size_t kernel_size, float* kernel, float* biases) {
+int builder_add_convolution(void* builder,
+    size_t input_id,
+    size_t feature_maps,
+    size_t input_c,
+    size_t kernel_size,
+    size_t padding,
+    size_t stride,
+    float* kernel, 
+    float* biases
+    ) {
     int64_t params_count = static_cast<int64_t>(feature_maps * input_c * kernel_size * kernel_size);
     Weights wKernel{nvinfer1::DataType::kFLOAT, kernel, params_count};
     Weights wBiases{nvinfer1::DataType::kFLOAT, biases, static_cast<int64_t>(feature_maps)};
-    return static_cast<TRTBuilder*>(builder)->addConvolution(input_id, feature_maps, kernel_size, wKernel, wBiases);
+    return static_cast<TRTBuilder*>(builder)->addConvolution(input_id, feature_maps, kernel_size, padding, stride, wKernel, wBiases);
 }
 
 int builder_add_activation(void* builder, size_t input_id, const char* act_name) {

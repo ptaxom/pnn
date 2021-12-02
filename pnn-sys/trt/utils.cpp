@@ -5,6 +5,10 @@
 #include <fstream>
 #include <sstream>
 
+#include <NvInferPlugin.h>
+
+#include "activation.hpp"
+
 using namespace nvinfer1;
 
 using Severity = ILogger::Severity;
@@ -62,4 +66,20 @@ std::unique_ptr<nvinfer1::IBuilder> getIBuilder() {
 
 std::unique_ptr<nvinfer1::IRuntime> getIRuntime() {
     return std::unique_ptr<nvinfer1::IRuntime>(createInferRuntime(EngineLogger));
+}
+
+ActivationCreator ACTIVATION_CREATOR; 
+bool ACTIVATION_REGISTERED = false;
+
+void init_plugins() {
+    initLibNvInferPlugins((void*)&EngineLogger, "");
+    if (!ACTIVATION_REGISTERED) {
+        bool registered = getPluginRegistry()->registerCreator(ACTIVATION_CREATOR, "");
+        if (!registered) {
+            std::cerr << "Couldnt register ActivationPlugin" << std::endl;
+        } else {
+            std::cout << "Registered plugin" << std::endl;
+        }
+        ACTIVATION_REGISTERED = true;
+    }
 }

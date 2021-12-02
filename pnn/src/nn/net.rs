@@ -9,7 +9,7 @@ use crate::nn::errors::*;
 use crate::cudnn::{cudnnHandle_t, cudnnCreate, cudnnDataType, cudaDeviceSynchronize, DevicePtr};
 use crate::nn::ops::*;
 use crate::nn::{BoundingBox};
-use crate::nn::{Engine, CUDNNEngine};
+use crate::nn::{Engine, CUDNNEngine, TRTBuilder};
 
 pub type LayerRef = Rc<RefCell<Box<dyn Layer>>>;
 
@@ -312,35 +312,31 @@ impl Network {
         Ok(())
     }
 
-    pub fn build_trt(&mut self, batchsize: usize, data_type: cudnnDataType, weights: Option<String>) -> Result<(), BuildError> {
+    pub fn build_trt(&mut self, batchsize: usize, data_type: cudnnDataType, weights_path: &String, engine_path: Option<String>) -> Result<(), BuildError> {
         if self.batchsize.is_some() || self.engine.is_some() {
             return Err(BuildError::Runtime(RuntimeError::Other(String::from("Engine is builded"))))
         }
         self.set_batchsize(batchsize)?;
-        if let Some(path) = weights {
-            self.load_darknet_weights(&path)?
-        }
+        self.load_darknet_weights(weights_path)?;
 
-        let engine = Rc::new(RefCell::new(CUDNNEngine::new(data_type.clone(), self.batchsize.unwrap(), self.size)?));
+        let builder = Rc::new(RefCell::new(TRTBuilder::new(data_type.clone(), self.batchsize.unwrap(), self.size)?));
     
         {   // Allocate tensors for first layer
             let mut first_layer = self.layers[0].borrow_mut();
-            first_layer.build_cudnn(engine.clone(), vec![], true)?;
+            first_layer.build_trt(builder.clone(), vec![])?;
         }
 
         for i in 1..self.layers.len() {
-            let has_depend_layers = self.adjency_matrix[i].iter().filter(|l| {
-                l == &&Link::Forward
-            }).count() > 1;
             let mut indeces = Vec::new();
             for (col, link) in self.adjency_matrix[i].iter().enumerate() {
                 if *link == Link::Backward {
                     indeces.insert(0, col);
                 }
             }
-            self.layers[i].borrow_mut().build_cudnn(engine.clone(), indeces, has_depend_layers)?;
+            self.layers[i].borrow_mut().build_trt(builder.clone(), indeces)?;
         }
-        self.engine = Some(engine);
+        builder.borrow_mut().build(1, 1, engine_path.unwrap())?;
+        // self.engine = Some(engine);
 
         Ok(())
     }

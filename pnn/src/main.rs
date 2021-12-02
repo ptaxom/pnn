@@ -42,7 +42,7 @@ fn main() {
         &String::from("./cfgs/tests/yolov4-csp.cfg"),
         &String::from("../models/yolov4-csp.weights"),
         &String::from("./cfgs/tests/coco.names"),
-        &cudnnDataType::FLOAT,
+        &cudnnDataType::HALF,
         1,
         0.3,
         0.3

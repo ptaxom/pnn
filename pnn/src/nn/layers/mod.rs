@@ -8,7 +8,7 @@ use std::{
 
 use crate::nn::shape::*;
 use crate::nn::errors::*;
-use crate::nn::{Engine, CUDNNEngine, BuildInformation};
+use crate::nn::{Engine, CUDNNEngine, BuildInformation, TRTBuilder};
 use crate::nn::ops::{LayerOp, OutputTensor};
 use crate::parsers::DeserializationError;
 use crate::cudnn::{cudnnHandle_t, cudnnDataType};
@@ -37,11 +37,15 @@ pub trait Layer {
         Ok(vec![position - 1])
     }
 
-
     fn build_cudnn(&mut self, 
         engine: Rc<RefCell<CUDNNEngine>>,
         indeces: Vec<usize>,
         has_depend_layers: bool
+    ) -> Result<(), BuildError>;
+
+    fn build_trt(&mut self, 
+        engine: Rc<RefCell<TRTBuilder>>,
+        indeces: Vec<usize>
     ) -> Result<(), BuildError>;
 
     // Initialize weights using darknet model file. Consume initial offset and return new

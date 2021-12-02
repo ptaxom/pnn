@@ -11,7 +11,7 @@ use crate::nn::shape::*;
 use crate::nn::{Layer, LayerType, errors::*, BuildInformation};
 use crate::parsers::{DeserializationError, parse_list_field};
 use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
-use crate::nn::{CUDNNEngine, Engine};
+use crate::nn::{CUDNNEngine, TRTBuilder};
 use crate::nn::ops::{LayerOp, OutputTensor, InputTensor, RouteOp};
 
 
@@ -138,6 +138,19 @@ impl Layer for RouteLayer {
             })?)
         );
         engine.borrow_mut().add_layer(operations, BuildInformation{tensor, reusable});
+        Ok(())
+    }
+
+    fn build_trt(&mut self, 
+        engine: Rc<RefCell<TRTBuilder>>,
+        indeces: Vec<usize>
+    ) -> Result<(), BuildError> {
+        let mut engine = engine.borrow_mut();
+        let indeces: Vec<usize> = indeces.iter().map(|x| {
+            engine.last_op_id(*x)
+        }).collect();
+        let id = engine.add_route(&indeces)?;
+        engine.finilize_layer(id);
         Ok(())
     }
 

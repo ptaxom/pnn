@@ -6,7 +6,16 @@
 
 #include "utils.hpp"
 
+std::string dim2str(const Dims &obj) {
+    std::stringstream os;
+    for(int i = 0; i < obj.nbDims - 1; i++)
+        os << obj.d[i] << "x";
+    os << obj.d[obj.nbDims - 1];
+    return os.str();
+}
+
 TRTBuilder::TRTBuilder(cudnnDataType_t dataType, int32_t maxBatchsize): mBatchSize(maxBatchsize) {
+    init_plugins();
     switch (dataType)
     {
     case CUDNN_DATA_INT8:
@@ -45,6 +54,14 @@ TRTBuilder::TRTBuilder(cudnnDataType_t dataType, int32_t maxBatchsize): mBatchSi
 TRTBuilder::~TRTBuilder() {
 }
 
+void TRTBuilder::setLayerName(ILayer* layer, const std::string &prefix) {
+    std::stringstream ss;
+    if (mCounter.find(prefix) == mCounter.end()) mCounter[prefix] = 0;
+    ss << prefix << "_" << mCounter[prefix];
+    ++mCounter[prefix];
+    layer->setName(ss.str().c_str());
+}
+
 int TRTBuilder::addLayer(ILayer* layer) {
     if (!layer) return -1;
 
@@ -52,18 +69,24 @@ int TRTBuilder::addLayer(ILayer* layer) {
     return mLayers.size() - 1;
 }
 
-int TRTBuilder::addConvolution(size_t input_id,  int feature_maps, int kernel_size, Weights kernel, Weights biases) {
+int TRTBuilder::addConvolution(size_t input_id,  int feature_maps, int kernel_size, int padding, int stride, Weights kernel, Weights biases) {
     ITensor* tensor = mLayers[input_id]->getOutput(0);
     if (!tensor) return -1;
 
-    ILayer* conv = mNetworkDefenition->addConvolutionNd(
+    ILayer* layer = mNetworkDefenition->addConvolutionNd(
         *tensor,
         feature_maps,
         Dims{2, {kernel_size, kernel_size}},
         kernel,
         biases
     );
-    return addLayer(conv);
+    if (!layer) return -1;
+    IConvolutionLayer* conv = dynamic_cast<IConvolutionLayer*>(layer);
+    conv->setPaddingNd(Dims{2, {padding, padding}});
+    conv->setStrideNd(Dims{2, {stride, stride}});
+    setLayerName(layer, "Convolution");
+
+    return addLayer(layer);
 }
 
 int TRTBuilder::addActivation(size_t input_id,  const std::string &activation_name) {
@@ -73,7 +96,7 @@ int TRTBuilder::addActivation(size_t input_id,  const std::string &activation_na
     ILayer* layer = nullptr;
     
     if (activation_name == "mish") {
-        IPluginCreator* creator = getPluginRegistry()->getPluginCreator("YOLOMishPlugin", "1");
+        IPluginCreator* creator = getPluginRegistry()->getPluginCreator("YOLOMishPlugin", "1", "");
         if (!creator) {
             std::cerr << "Couldnt find Mish Plugin for YOLO" << std::endl;
             return -1;
@@ -82,13 +105,15 @@ int TRTBuilder::addActivation(size_t input_id,  const std::string &activation_na
         IPluginV2 *pluginObj = creator->createPlugin("mish", pluginData);
 
         layer = mNetworkDefenition->addPluginV2(&tensor, 1, *pluginObj);
+        if (!layer) return -1;
+        setLayerName(layer, "Mish");
     } else if (activation_name == "logistic") {
         layer = mNetworkDefenition->addActivation(*tensor, ActivationType::kSIGMOID);
+        if (!layer) return -1;
+        setLayerName(layer, "Logistic");
     } else if (activation_name == "linear") { 
         return mLayers.size() - 1;
     }
-    
-    if (!tensor) return -1;
 
     return addLayer(layer);
 }
@@ -128,6 +153,7 @@ int TRTBuilder::addUpsample(size_t input_id,  size_t stride) {
 
     ILayer *layer = mNetworkDefenition->addResize(*tensor);
     if (!layer) return -1;
+    setLayerName(layer, "Upsample");
 
     IResizeLayer* resize = dynamic_cast<IResizeLayer*>(layer);
     float scale = static_cast<float>(stride);
@@ -153,9 +179,10 @@ int TRTBuilder::addRoute(const std::vector<size_t> &input_ids) {
 
     ILayer* layer = mNetworkDefenition->addConcatenation(inputs.data(), inputs.size());
     if (!layer) return -1;
+    setLayerName(layer, "Route");
 
     IConcatenationLayer* concat = dynamic_cast<IConcatenationLayer*>(layer);
-    concat->setAxis(0); // Concat across chanell
+    concat->setAxis(1); // Concat across chanell WTF????? https://docs.nvidia.com/deeplearning/tensorrt/api/c_api/classnvinfer1_1_1_i_concatenation_layer.html#a27152d1ea5cf0ee387acd6adafe68f2d
 
     return addLayer(concat);
 }
@@ -166,6 +193,7 @@ int TRTBuilder::addInput(const std::string &name, int32_t channels, int32_t heig
     if (!input) return -1;
 
     ILayer* identety = mNetworkDefenition->addIdentity(*input);
+    setLayerName(identety, "Identety");
     return addLayer(identety);
 }
 
@@ -181,10 +209,11 @@ int TRTBuilder::addPooling(size_t input_id, int32_t stride, int32_t window_size,
 
     ILayer *layer = mNetworkDefenition->addPoolingNd(*tensor, is_max ? PoolingType::kMAX : PoolingType::kAVERAGE, Dims{2, {window_size, window_size}});
     if (!layer) return -1;
+    setLayerName(layer, "Pooling");
 
     IPoolingLayer* pool = dynamic_cast<IPoolingLayer*>(layer);
-    pool->setStrideNd(Dims{4, {1, 1, stride, stride}});
-    pool->setPaddingNd(Dims{4, {1, 1, padding, padding}});
+    pool->setStrideNd(Dims{2, {stride, stride}});
+    pool->setPaddingNd(Dims{2, {padding, padding}});
     return addLayer(pool);
 }
 

@@ -46,7 +46,15 @@ impl TRTBuilder {
         Ok(TRTBuilder{batchsize, input_size, data_type, layer_indeces, builder})
     }
 
-    pub fn add_input(&mut self, name: &String, shape: Rc<dyn Shape>) -> Result<usize, BuildError> {
+    pub fn finilize_layer(&mut self, id: usize) {
+        self.layer_indeces.push(id);
+    }
+
+    pub fn last_op_id(&self, layer_id: usize) -> usize {
+        self.layer_indeces[layer_id]
+    }
+
+    pub fn add_input(&mut self, name: &String, shape: Rc<dyn Shape>) -> Result<(), BuildError> {
         let cname = std::ffi::CString::new(name.clone()).unwrap();
         unsafe {
             let id = pnn_sys::builder_add_input(self.builder, 
@@ -59,8 +67,8 @@ impl TRTBuilder {
                 return get_error("Could add Input to TRTBuilder")
             }
             self.layer_indeces.push(id as usize);
-            Ok(id as usize)
         }
+        Ok(())
     }
 
     pub fn add_yolo(&mut self, ind: usize, name: &String) -> Result<(), BuildError> {
@@ -79,9 +87,11 @@ impl TRTBuilder {
         filters: usize, 
         input_channels: usize,
         kernel_size: usize,
+        padding: usize,
+        stride: usize,
         kernels: &Vec<f32>,
         biases: &Vec<f32>
-    ) -> Result<usize, BuildError> { 
+    ) -> Result<usize, BuildError> {
         unsafe {
             let id = pnn_sys::builder_add_convolution(
                 self.builder,
@@ -89,13 +99,14 @@ impl TRTBuilder {
                 filters,
                 input_channels,
                 kernel_size,
+                padding,
+                stride,
                 kernels.as_ptr(),
                 biases.as_ptr()
             );
             if id < 0 {
                 return get_error("Could add Convolution to TRTBuilder")
             }
-            self.layer_indeces.push(id as usize);
             Ok(id as usize)
         }
     }
@@ -116,7 +127,6 @@ impl TRTBuilder {
             if id < 0 {
                 return get_error("Could add Activation to TRTBuilder")
             }
-            self.layer_indeces.push(id as usize);
             Ok(id as usize)
         }
     }
@@ -131,7 +141,6 @@ impl TRTBuilder {
             if id < 0 {
                 return get_error("Could add Shortcut to TRTBuilder")
             }
-            self.layer_indeces.push(id as usize);
             Ok(id as usize)
         }
     }
@@ -146,7 +155,6 @@ impl TRTBuilder {
             if id < 0 {
                 return get_error("Could add Route to TRTBuilder")
             }
-            self.layer_indeces.push(id as usize);
             Ok(id as usize)
         }
     }
@@ -155,16 +163,26 @@ impl TRTBuilder {
         stride: usize,
         window_size: usize,
         padding: usize,
-        is_max: bool) -> Result<usize, BuildError> {
+        is_max: bool
+    ) -> Result<usize, BuildError> {       
         unsafe {
             let id = pnn_sys::builder_add_pooling(
                 self.builder,
-                ind, stride, window_size, padding, is_max as usize
+                ind, stride, window_size, padding / 2, is_max as usize
             );
             if id < 0 {
                 return get_error("Could add Pooling to TRTBuilder")
             }
-            self.layer_indeces.push(id as usize);
+            Ok(id as usize)
+        }
+    }
+
+    pub fn add_upsample(&mut self, ind: usize, stride: usize) -> Result<usize, BuildError> {
+        unsafe {
+            let id = pnn_sys::builder_add_upsample(self.builder, ind, stride);
+            if id < 0 {
+                return get_error("Could add Upsample to TRTBuilder")
+            }
             Ok(id as usize)
         }
     }
@@ -178,7 +196,7 @@ impl TRTBuilder {
                 min_iters,
                 name.as_ptr()
             );
-            if res != 0 {
+            if res == 0 {
                 return get_error("Couldnt build engine")
             }
         }
@@ -207,8 +225,6 @@ impl Drop for TRTBuilder {
 pub struct TRTEngine {
     // datatype
     data_type: cudnnDataType,
-    // Net size, can be usefull for postprocess
-    input_size: (usize, usize),
     // Batchsize
     batchsize: usize,
     // Inputs
