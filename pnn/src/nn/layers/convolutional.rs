@@ -13,6 +13,7 @@ use crate::nn::{Layer, LayerType, errors::*, ActivationType, BuildInformation};
 use crate::parsers::{DeserializationError, parse_numerical_field};
 use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
 use crate::nn::ops::{LayerOp, OutputTensor, ConvolutionOp, BatchnormOp, ActivationOp, BiasOp};
+use crate::nn::{CUDNNEngine, Engine, TRTBuilder};
 
 type F32Vec = Vec<f32>;
 const FUSE_CONV_BATCHNORM: bool = true;
@@ -45,12 +46,6 @@ pub struct ConvolutionalLayer {
     padding: usize,
     // Activation
     activation: ActivationType,
-    // List of operations
-    operations: Vec<Box<dyn LayerOp>>,
-    // Can be reusable
-    reusable: bool,
-    // Output tensor
-    tensor: Option<OutputTensor>,
     // Weights
     weights: Option<Weights>,
     // previous channel size
@@ -142,9 +137,6 @@ impl Layer for ConvolutionalLayer {
             log::warn!("Not supported darknet field during deserialization of '{}'. Field '{}' not recognized", name, k)
         });
 
-        let tensor = None;
-        let operations = vec![];
-        let reusable = false;
         let weights = None;
         let prev_c = None;
 
@@ -152,37 +144,34 @@ impl Layer for ConvolutionalLayer {
             filters, batch_normalize, 
             size, stride,
             pad, padding, 
-            activation, operations,
-            reusable, tensor,
+            activation,
             weights, prev_c
         }))
     }
 
-    fn layer_type(&self) -> LayerType {
+    fn ltype(&self) -> LayerType {
         LayerType::Convolutional
     }
 
-    fn get_build_information(&self) -> BuildInformation {
-        BuildInformation{tensor: self.tensor.as_ref().unwrap().clone(), reusable: self.reusable}
-    }
-
-    fn get_operations(&mut self) -> &mut Vec<Box<dyn LayerOp>> {
-        &mut self.operations
-    }
-
-    fn build(&mut self, 
-        context: Rc<cudnnHandle_t>,
-        data_type: &cudnnDataType,
-        info: Vec<BuildInformation>,
+    fn build_cudnn(&mut self, 
+        engine: Rc<RefCell<CUDNNEngine>>,
+        indeces: Vec<usize>,
         has_depend_layers: bool
     ) -> Result<(), BuildError> {
-        self.reusable = !has_depend_layers;
+        let reusable = !has_depend_layers;
+        let mut operations: Vec<Box<dyn LayerOp>> = Vec::new();
+        let tensor: OutputTensor;
+        let data_type = engine.borrow().dtype();
+
+        let info: Vec<BuildInformation> = indeces.iter().map(|x| {
+            engine.borrow().get_info(*x)
+        }).collect();
 
         let shape = self.shape().unwrap();
         let input_tensor = info[0].tensor.clone();
         // Inplace conv not work ;(
         if shape.as_ref().dims() == input_tensor.borrow().shape().dims() && info[0].reusable && false {
-            self.tensor = Some(input_tensor.clone())
+            tensor = input_tensor.clone()
         } else {
             let ptr = Rc::new(RefCell::new(
                 DevicePtr::new(data_type.clone(), shape.size()).map_err(|e| {
@@ -190,24 +179,24 @@ impl Layer for ConvolutionalLayer {
                 })?
             ));
             let tensor_shape: Box<dyn Shape> = Box::new(LayerShape::new(shape.dims()));
-            let tensor = Rc::new(RefCell::new(
+
+            tensor = Rc::new(RefCell::new(
                 Tensor::new(tensor_shape, ptr).map_err(|e| {
                     BuildError::Runtime(e)
                 })?
             ));
 
-            self.tensor = Some(tensor);
         }
-        let t = self.tensor.as_ref().unwrap();
+
         let conv_weights = match &self.weights {
             Some(w) => Some(&w.conv),
             _ => None
         };
-        self.operations.push(
+        operations.push(
             Box::new(ConvolutionOp::new(
-                context.clone(),
+                engine.borrow().context(),
                 input_tensor.clone(),
-                t.clone(),
+                tensor.clone(),
                 &data_type, 
                 self.filters,
                 self.prev_c.unwrap(),
@@ -230,11 +219,11 @@ impl Layer for ConvolutionalLayer {
                 }
             }
           
-            self.operations.push(
+            operations.push(
                 Box::new(BatchnormOp::new(
-                    context.clone(),
-                    t.clone(),
-                    t.clone(),
+                    engine.borrow().context(),
+                    tensor.clone(),
+                    tensor.clone(),
                     &data_type, 
                     self.filters,
                     batch_weights
@@ -243,11 +232,11 @@ impl Layer for ConvolutionalLayer {
                 })?)
             );
         } else {
-            self.operations.push(
+            operations.push(
                 Box::new(BiasOp::new(
-                    context.clone(),
-                    t.clone(),
-                    t.clone(),
+                    engine.borrow().context(),
+                    tensor.clone(),
+                    tensor.clone(),
                     &data_type,
                     biases
                 ).map_err(|e| {
@@ -256,24 +245,40 @@ impl Layer for ConvolutionalLayer {
             );
         }
 
-        self.operations.push(
+        operations.push(
             Box::new(ActivationOp::new(
-                context.clone(), 
-                t.clone(),
+                engine.borrow().context(), 
+                tensor.clone(),
                 &data_type, 
                 &self.activation
             ).map_err(|e| {
                 BuildError::Runtime(e)
             })?)
         );
+        engine.borrow_mut().add_layer(operations, BuildInformation{tensor, reusable});
         Ok(())
     }
 
-    // let delta: f64 = bn.0[channel] as f64 / ((bn.2[channel] as f64).sqrt() + 0.00001);
-    // let before = biases[channel];
-    // // result is really differ, see darknet
-    // biases[channel] = (biases[channel] as f64 + ((bn.1[channel] as f64) * delta)) as f32;
+    fn build_trt(&mut self, 
+        engine: Rc<RefCell<TRTBuilder>>,
+        indeces: Vec<usize>
+    ) -> Result<(), BuildError> {
 
+        if self.weights.is_none() || !FUSE_CONV_BATCHNORM {
+            return Err(BuildError::Runtime(RuntimeError::Other(String::from("For TRTEngine convolution layer shoud have weights and use FUSED_CONV_BATCHNORM"))))
+        }
+        let mut engine = engine.borrow_mut();
+
+        let mut id: usize = engine.last_op_id(indeces[0]);
+
+        let kernels = &self.weights.as_ref().unwrap().conv;
+        let biases  = &self.weights.as_ref().unwrap().biases;
+        
+        id = engine.add_convolution(id, self.filters, self.prev_c.unwrap(), self.size, self.padding, self.stride, kernels, biases)?;
+        id = engine.add_activation(id, self.activation.clone())?;
+        engine.finilize_layer(id);
+        Ok(())
+    }
 
     // Initialize weights using darknet model file. Consume initial offset and return new
     fn load_darknet_weights(&mut self, offset: usize, bytes: &Vec<u8>) -> Result<usize, BuildError> {
@@ -309,23 +314,6 @@ impl Layer for ConvolutionalLayer {
 
         Ok(offset)
     }
-
-    fn forward_debug(&mut self) -> Result<(), RuntimeError> {
-        let mut i = 0;
-        let suffixes = ["conv", "batchnorm", "act"];
-        let name = &self.name();
-        let ptr = self.tensor.as_ref().unwrap().borrow_mut().ptr();
-
-        for op in self.get_operations() {
-            op.forward()?;
-            ptr.borrow().dump(
-                &format!("./debug/activation/{}_{}.bin", name, suffixes[i])
-            ).unwrap();
-            i += 1;
-        }
-        Ok(())
-    }
-
     
 }
 
@@ -455,9 +443,9 @@ mod tests {
     }
 
     #[test]
-    fn test_layer_type() {
+    fn test_ltype() {
         let layer = ConvolutionalLayer::from_config(generate_config()).unwrap();
-        assert_eq!(layer.layer_type(), LayerType::Convolutional);
+        assert_eq!(layer.ltype(), LayerType::Convolutional);
     }
 
 }

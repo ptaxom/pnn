@@ -11,6 +11,7 @@ use crate::nn::shape::*;
 use crate::nn::{Layer, LayerType, errors::*, BuildInformation};
 use crate::parsers::{DeserializationError, parse_numerical_field};
 use crate::nn::ops::{LayerOp, OutputTensor, InputTensor, create_otensor, ConvertOp};
+use crate::nn::{CUDNNEngine, TRTBuilder};
 use crate::cudnn::{cudnnHandle_t, cudnnDataType};
 
 
@@ -23,11 +24,6 @@ pub struct InputLayer {
     shape: Option<Rc<dyn Shape>>,
     // batchless shape dims. After defining batchsize it should become shape
     dims: Vec<usize>,
-
-    tensor: Option<OutputTensor>,
-    reusable: bool,
-    operations: Vec<Box<dyn LayerOp>>,
-    input_tensor: Option<InputTensor>
 }
 
 
@@ -72,55 +68,58 @@ impl Layer for InputLayer {
                 _ => return Err(DeserializationError(String::from("Couldnt use key 'width' without key 'height' in InputLayer")))
             }
         }
-        let tensor = None;
-        let reusable = false;
-        let operations = vec![];
-        let input_tensor = None;
 
-        Ok(Box::new(InputLayer{name, shape, dims, tensor, reusable, operations, input_tensor}))
+        Ok(Box::new(InputLayer{name, shape, dims}))
     }
 
-    fn layer_type(&self) -> LayerType {
+    fn ltype(&self) -> LayerType {
         LayerType::Input
     }
 
-    fn get_build_information(&self) -> BuildInformation {
-        BuildInformation{tensor: self.tensor.as_ref().unwrap().clone(), reusable: self.reusable}
-    }
-
-    fn get_operations(&mut self) -> &mut Vec<Box<dyn LayerOp>> {
-        &mut self.operations
-    }
-
-    fn build(&mut self, 
-        context: Rc<cudnnHandle_t>,
-        data_type: &cudnnDataType,
-        _info: Vec<BuildInformation>,
-        _has_depend_layers: bool
+    fn build_cudnn(&mut self, 
+        engine: Rc<RefCell<CUDNNEngine>>,
+        _indeces: Vec<usize>,
+        _: bool
     ) -> Result<(), BuildError> {
         let shape = self.shape().unwrap();
         let itensor = create_otensor(shape.clone(), cudnnDataType::FLOAT)?;
-        self.input_tensor = Some(itensor.clone());
 
-        if data_type != &cudnnDataType::FLOAT {
+        let data_type = engine.borrow().dtype();
+        let tensor;
+        let mut operations: Vec<Box<dyn LayerOp>> = Vec::new();
+
+        if data_type != cudnnDataType::FLOAT {
             let otensor = create_otensor(shape.clone(), data_type.clone())?;
-            self.operations.push(
+            operations.push(
                 Box::new(ConvertOp::new(
-                    context.clone(),
+                    engine.borrow().context(),
                     itensor.clone(),
                     otensor.clone(),
                 ).map_err(|e| {
                     BuildError::Runtime(e)
                 })?)
             );
-            self.tensor = Some(otensor);
+            tensor = otensor;
         }
         else {
-            self.tensor = Some(itensor)
+            tensor = itensor.clone();
         }
+        let ptr = itensor.clone().borrow_mut().ptr().clone();
+        engine.borrow_mut().add_input(&self.name(), ptr);
+        engine.borrow_mut().add_layer(operations, BuildInformation{tensor, reusable: false});
         Ok(())
     }
 
+    fn build_trt(&mut self, 
+        engine: Rc<RefCell<TRTBuilder>>,
+        indeces: Vec<usize>
+    ) -> Result<(), BuildError> {
+        engine.borrow_mut().add_input(
+            &self.name(),
+            self.shape().unwrap()
+        )?;
+        Ok(())
+    }
 }
 
 impl InputLayer {
@@ -129,13 +128,6 @@ impl InputLayer {
         let mut new_dims = self.dims.clone();
         new_dims.insert(0, batchsize);
         self.shape = Some(Rc::new(LayerShape::new(new_dims)));
-    }
-
-    pub fn get_input_tensor(&mut self) -> Result<InputTensor, BuildError> {
-        if let Some(t) = &self.input_tensor {
-            return Ok(t.clone());
-        }
-        Err(BuildError::Runtime(RuntimeError::Other(String::from("Layer is not builded"))))
     }
 }
 
@@ -197,13 +189,13 @@ mod tests {
     }
 
     #[test]
-    fn test_layer_type() {
+    fn test_ltype() {
         let mut config = generate_config();
         config.insert(String::from("height"), String::from("5"));
         config.insert(String::from("width"), String::from("6"));
         let layer = InputLayer::from_config(config).unwrap();
 
-        assert_eq!(layer.layer_type(), LayerType::Input);
+        assert_eq!(layer.ltype(), LayerType::Input);
     }
 
     #[test]

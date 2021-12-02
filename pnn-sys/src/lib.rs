@@ -6,3 +6,4 @@
 
 include!("./bindings.rs");
 include!("./cuda.rs");
+include!("./trt.rs");

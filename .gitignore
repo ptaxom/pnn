@@ -3,3 +3,5 @@
 *.dot
 /render
 /debug
+/pnn-sys/trt/trt
+*.engine

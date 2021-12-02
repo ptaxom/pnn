@@ -15,7 +15,7 @@ extern "C" fn infer_call(net: *mut c_void,n_boxes: *mut usize, infer_time: *mut 
         }
 
         let mut total_boxes: usize = 0;
-        let predictions = (*network).get_yolo_predictions().unwrap();
+        let predictions = (*network).get_detections().unwrap();
         for i in 0..predictions.len() {
             let sample_bboxes = predictions[i].len();
             *n_boxes = sample_bboxes;
@@ -62,9 +62,9 @@ pub fn demo(video_path: &String,
         ffi_ptrs.push(std::ptr::null());
 
         let mut net = crate::nn::Network::from_darknet(config_file)?;
-        net.set_batchsize(batchsize)?;
-        net.load_darknet_weights(weight_path)?;
-        net.build(data_type)?;
+        // net.build_cudnn(batchsize, data_type.clone(), Some(weight_path.clone()))?;
+        net.build_trt(batchsize, data_type.clone(), weight_path, Some(String::from("yolo.engine")))?;
+        let i_ptr = net.get_input_ptr().borrow_mut().ptr() as *mut std::os::raw::c_void;
         println!("Builded yolo");
         net.set_detections_ops(threshold, nms_threshold);
         
@@ -75,7 +75,7 @@ pub fn demo(video_path: &String,
                 batchsize,
                 net.get_size().1,
                 net.get_size().0,
-                net.get_input_ptr()?,
+                i_ptr,
                 std::ptr::addr_of!(net) as *mut c_void,
                 infer_call
                 );

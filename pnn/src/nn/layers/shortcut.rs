@@ -13,6 +13,7 @@ use crate::nn::{Layer, LayerType, errors::*, ActivationType, BuildInformation};
 use crate::parsers::{DeserializationError, parse_list_field};
 use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
 use crate::nn::ops::{LayerOp, OutputTensor, InputTensor, ShortcutOp, ActivationOp};
+use crate::nn::{CUDNNEngine, TRTBuilder};
 
 
 //Input layer for most NNs
@@ -26,12 +27,6 @@ pub struct ShortcutLayer {
     from: Vec<i32>,
     // Activation function
     activation: ActivationType,
-    // List of operations
-    operations: Vec<Box<dyn LayerOp>>,
-    // Can be reusable
-    reusable: bool,
-    // Output tensor
-    tensor: Option<OutputTensor>
 }
 
 const SUPPORTED_FIELDS: [&str; 2] = [
@@ -89,26 +84,22 @@ impl Layer for ShortcutLayer {
             log::warn!("Not supported darknet field during deserialization of '{}'. Field '{}' not recognized", name, k)
         });
 
-        let tensor = None;
-        let operations = vec![];
-        let reusable = false;
-
-        Ok(Box::new(ShortcutLayer{name, shape, from, activation, tensor, operations, reusable}))
+        Ok(Box::new(ShortcutLayer{name, shape, from, activation}))
     }
 
-    fn layer_type(&self) -> LayerType {
+    fn ltype(&self) -> LayerType {
         LayerType::Shortcut
     }
 
-    fn input_indices(&self, position: usize) -> Result<Vec<usize>, DeserializationError> {
+    fn input_indices(&self, position: usize) -> Result<Vec<usize>, BuildError> {
         if position < 2 {
-            return Err(DeserializationError(String::from("Couldnt compute input index for first or second layer")))
+            return Err(BuildError::Deserialization(DeserializationError(String::from("Couldnt compute input index for first or second layer"))))
         }
-        let indeces: Result<Vec<usize>, DeserializationError> = self.from.iter().map(|x| {
+        let indeces: Result<Vec<usize>, BuildError> = self.from.iter().map(|x| {
             // -1 to compensate input layer during absolute index. # TODO: fix it
             let index: i32 = if *x > 0i32 {*x + 1} else {position as i32 + *x};
             if index >= position as i32 || index < 0 {
-                return Err(DeserializationError(format!("Couldnt reffer to {} from '{}'", index, self.name)))
+                return Err(BuildError::Deserialization(DeserializationError(format!("Couldnt reffer to {} from '{}'", index, self.name))))
             }
             Ok(index as usize)
         }).collect();
@@ -117,53 +108,70 @@ impl Layer for ShortcutLayer {
         Ok(indeces)
     }
 
-    fn get_build_information(&self) -> BuildInformation {
-        BuildInformation{tensor: self.tensor.as_ref().unwrap().clone(), reusable: self.reusable}
-    }
-
-    fn get_operations(&mut self) -> &mut Vec<Box<dyn LayerOp>> {
-        &mut self.operations
-    }
-
-    fn build(&mut self, 
-        context: Rc<cudnnHandle_t>,
-        data_type: &cudnnDataType,
-        info: Vec<BuildInformation>,
+    fn build_cudnn(&mut self, 
+        engine: Rc<RefCell<CUDNNEngine>>,
+        indeces: Vec<usize>,
         has_depend_layers: bool
     ) -> Result<(), BuildError> {
-        self.reusable = !has_depend_layers;
+        let reusable = !has_depend_layers;
+        let build_info: Vec<BuildInformation> = indeces.iter().map(|x| {
+            engine.borrow().get_info(*x)
+        }).collect();
+        let mut tensor = build_info[0].tensor.clone();
+        let data_type = engine.borrow().dtype();
+        let mut operations: Vec<Box<dyn LayerOp>> = Vec::new();
 
         // Assuming, that we can use first input layer for inplace operations
-        if !info[0].reusable {
-            return Err(BuildError::Runtime(RuntimeError::Other(String::from("Shortcut can be built only when first tensor is allow inplace ops"))));
-        }
-        self.tensor = Some(info[0].tensor.clone());
         let mut inputs: Vec<InputTensor> = Vec::new();
-        for i in 1..info.len() {
-            inputs.push(info[i].tensor.clone());
+
+        let mut found_buffer = false;
+        for info in &build_info {
+            if info.reusable {
+                tensor = info.tensor.clone();
+                found_buffer = true;
+            } else {
+                inputs.push(info.tensor.clone());
+            }
         }
+        if !found_buffer {
+            return Err(BuildError::Runtime(RuntimeError::Other(String::from("Shortcut can have at least one tensor allow inplace ops"))));
+        }
+        
 
-        let t = info[0].tensor.clone();
-
-        self.operations.push(
+        operations.push(
             Box::new(ShortcutOp::new(
-                context.clone(),
+                engine.borrow().context(),
                 inputs,
-                t.clone()
+                tensor.clone()
             ).map_err(|e| {
                 BuildError::Runtime(e)
             })?)
         );
-        self.operations.push(
+        operations.push(
             Box::new(ActivationOp::new(
-                context.clone(), 
-                t.clone(),
+                engine.borrow().context(), 
+                tensor.clone(),
                 &data_type, 
                 &self.activation
             ).map_err(|e| {
                 BuildError::Runtime(e)
             })?)
         );
+        engine.borrow_mut().add_layer(operations, BuildInformation{tensor, reusable});
+        Ok(())
+    }
+
+    fn build_trt(&mut self, 
+        engine: Rc<RefCell<TRTBuilder>>,
+        indeces: Vec<usize>
+    ) -> Result<(), BuildError> {
+        let mut engine = engine.borrow_mut();
+        let indeces: Vec<usize> = indeces.iter().map(|x| {
+            engine.last_op_id(*x)
+        }).collect();
+        let id = engine.add_shortcut(&indeces)?;
+        let id = engine.add_activation(id, self.activation.clone())?;
+        engine.finilize_layer(id);
         Ok(())
     }
 
@@ -256,9 +264,9 @@ mod tests {
     }
 
     #[test]
-    fn test_layer_type() {
+    fn test_ltype() {
         let layer = ShortcutLayer::from_config(generate_config()).unwrap();
-        assert_eq!(layer.layer_type(), LayerType::Shortcut);
+        assert_eq!(layer.ltype(), LayerType::Shortcut);
     }
 
     #[test]
