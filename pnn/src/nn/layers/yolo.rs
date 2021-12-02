@@ -115,7 +115,7 @@ impl Layer for YoloLayer {
         }))
     }
 
-    fn layer_type(&self) -> LayerType {
+    fn ltype(&self) -> LayerType {
         LayerType::Yolo
     }
 
@@ -183,7 +183,7 @@ impl Layer for YoloLayer {
 }
 
 impl YoloLayer {
-    fn get_parser(&self, input_size: (usize, usize), ptr: Rc<RefCell<DevicePtr>>) -> Box<dyn DetectionsParser> {
+    pub fn get_parser(&self, input_size: (usize, usize), ptr: Rc<RefCell<DevicePtr>>) -> Box<dyn DetectionsParser> {
         let shape = self.shape().unwrap();
         Box::new(
             YoloHeadParser::new(
@@ -267,9 +267,9 @@ mod tests {
     }
     
     #[test]
-    fn test_layer_type() {
+    fn test_ltype() {
         let layer = YoloLayer::from_config(generate_config()).unwrap();
-        assert_eq!(layer.layer_type(), LayerType::Yolo);
+        assert_eq!(layer.ltype(), LayerType::Yolo);
     }
 
 }

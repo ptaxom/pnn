@@ -90,7 +90,7 @@ impl Layer for UpsampleLayer {
         Ok(Box::new(UpsampleLayer{name, shape, stride, scale}))
     }
 
-    fn layer_type(&self) -> LayerType {
+    fn ltype(&self) -> LayerType {
         LayerType::Upsample
     }
 
@@ -232,9 +232,9 @@ mod tests {
     }
 
     #[test]
-    fn test_layer_type() {
+    fn test_ltype() {
         let layer = UpsampleLayer::from_config(generate_config()).unwrap();
-        assert_eq!(layer.layer_type(), LayerType::Upsample);
+        assert_eq!(layer.ltype(), LayerType::Upsample);
     }
 
 }

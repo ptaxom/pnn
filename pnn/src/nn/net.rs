@@ -9,7 +9,7 @@ use crate::nn::errors::*;
 use crate::cudnn::{cudnnHandle_t, cudnnCreate, cudnnDataType, cudaDeviceSynchronize, DevicePtr};
 use crate::nn::ops::*;
 use crate::nn::{BoundingBox};
-use crate::nn::{Engine, CUDNNEngine, TRTBuilder};
+use crate::nn::{Engine, CUDNNEngine, TRTBuilder, TRTEngine};
 
 pub type LayerRef = Rc<RefCell<Box<dyn Layer>>>;
 
@@ -90,7 +90,7 @@ impl Network {
         
         for layer_pos in 0..n_layers-1 {
            let layer = &self.layers[layer_pos];
-           let layer_type = layer.as_ref().borrow().layer_type();
+           let layer_type = layer.as_ref().borrow().ltype();
            match layer_type {
             LayerType::Input => self.link_layers(layer_pos, layer_pos + 1),
             LayerType::Route => { // Separatly handle RouteLayer, because of it can be just redirection or mixin
@@ -162,10 +162,10 @@ impl Network {
                 BuildError::Deserialization(e)
             })?;
             let layer = Rc::new(RefCell::new(layer));
-            if layer.as_ref().borrow().layer_type() == LayerType::Input {
+            if layer.as_ref().borrow().ltype() == LayerType::Input {
                 n_inputs += 1;
             }
-            if layer.as_ref().borrow().layer_type() == LayerType::Yolo {
+            if layer.as_ref().borrow().ltype() == LayerType::Yolo {
                 yolo_heads.push(layer.clone());
             }
 
@@ -317,27 +317,47 @@ impl Network {
             return Err(BuildError::Runtime(RuntimeError::Other(String::from("Engine is builded"))))
         }
         self.set_batchsize(batchsize)?;
-        self.load_darknet_weights(weights_path)?;
+        let engine_path: String = engine_path.unwrap();
 
-        let builder = Rc::new(RefCell::new(TRTBuilder::new(data_type.clone(), self.batchsize.unwrap(), self.size)?));
-    
-        {   // Allocate tensors for first layer
-            let mut first_layer = self.layers[0].borrow_mut();
-            first_layer.build_trt(builder.clone(), vec![])?;
-        }
-
-        for i in 1..self.layers.len() {
-            let mut indeces = Vec::new();
-            for (col, link) in self.adjency_matrix[i].iter().enumerate() {
-                if *link == Link::Backward {
-                    indeces.insert(0, col);
-                }
+        let rebuild = true;
+        if rebuild {
+            self.load_darknet_weights(weights_path)?;
+            let builder = Rc::new(RefCell::new(TRTBuilder::new(data_type.clone(), self.batchsize.unwrap(), self.size)?));
+        
+            {   // Allocate tensors for first layer
+                let mut first_layer = self.layers[0].borrow_mut();
+                first_layer.build_trt(builder.clone(), vec![])?;
             }
-            self.layers[i].borrow_mut().build_trt(builder.clone(), indeces)?;
+    
+            for i in 1..self.layers.len() {
+                let mut indeces = Vec::new();
+                for (col, link) in self.adjency_matrix[i].iter().enumerate() {
+                    if *link == Link::Backward {
+                        indeces.insert(0, col);
+                    }
+                }
+                self.layers[i].borrow_mut().build_trt(builder.clone(), indeces)?;
+            }
+            builder.borrow_mut().build(1, 1, &engine_path)?;
         }
-        builder.borrow_mut().build(1, 1, engine_path.unwrap())?;
-        // self.engine = Some(engine);
+        let mut engine = TRTEngine::new(&engine_path).map_err(|e| {
+            BuildError::Runtime(e)
+        })?;
+        for i in 0..self.layers.len() {
+            let layer = self.layers[i].borrow();
+            if layer.ltype() == LayerType::Yolo {
+                let head = layer.as_any().downcast_ref::<YoloLayer>().unwrap();
+                let name = head.name();
+                let binding = engine.output_binding(&name).unwrap();
+                engine.add_detections_parser(
+                    &name,
+                    head.get_parser(self.size, binding)
+                );
 
+            }
+            
+        }
+        self.engine = Some(Rc::new(RefCell::new(engine)));
         Ok(())
     }
 
@@ -421,8 +441,8 @@ impl Network {
     }
 
     pub fn get_input_ptr(&self) -> Rc<RefCell<DevicePtr>> {
-        let inputs: Vec<Rc<RefCell<DevicePtr>>> = self.engine.as_ref().unwrap().borrow().input_bindings().values().cloned().collect();
-        inputs[0].clone()
+        let engine = self.engine.as_ref().unwrap().borrow();
+        engine.input_binding(&engine.inputs()[0]).unwrap()
     }
 
     pub fn load_image(&mut self, image_path: String, batch_id: usize) -> Result<(), RuntimeError> {

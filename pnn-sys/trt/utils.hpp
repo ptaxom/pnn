@@ -30,3 +30,7 @@ std::unique_ptr<nvinfer1::IBuilder> getIBuilder();
 std::unique_ptr<nvinfer1::IRuntime> getIRuntime();
 
 void init_plugins();
+
+std::string dim2str(const nvinfer1::Dims &obj);
+
+size_t dim2size(const nvinfer1::Dims &obj);

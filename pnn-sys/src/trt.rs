@@ -1,4 +1,15 @@
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+#[repr(C)]
+pub struct BindingInfo {
+    pub name: *const c_char,
+    pub batchsize: usize,
+    pub channels: usize,
+    pub height: usize,
+    pub width: usize,
+    pub is_input: c_int
+}
+
 extern "C" {
     pub fn builder_create(dtype: usize, batchsize: usize) -> *mut c_void;
 
@@ -36,4 +47,19 @@ extern "C" {
     ) -> c_int;
 
     pub fn builder_build(builder: *mut c_void, avg_iters: usize, min_iters: usize, engine_path: *const c_char) -> c_int;
+
+    pub fn engine_create(engine_path: *const c_char, stream: cudaStream_t) -> *mut c_void;
+
+    pub fn engine_destroy(engine: *mut c_void);
+
+    pub fn engine_batchsize(engine: *mut c_void) -> usize;
+
+    pub fn engine_get_info(engine: *mut c_void, ind: usize) -> BindingInfo;
+
+    pub fn engine_add_ptr(engine: *mut c_void, ptr: *const c_void);
+
+    pub fn engine_forward(engine: *mut c_void);
+
+    pub fn engine_n_bindings(engine: *mut c_void) -> usize;
+
 }

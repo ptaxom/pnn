@@ -81,7 +81,7 @@ impl Layer for RouteLayer {
         Ok(Box::new(RouteLayer{name, shape, layers}))
     }
 
-    fn layer_type(&self) -> LayerType {
+    fn ltype(&self) -> LayerType {
         LayerType::Route
     }
 
@@ -250,9 +250,9 @@ mod tests {
     }
 
     #[test]
-    fn test_layer_type() {
+    fn test_ltype() {
         let layer = RouteLayer::from_config(generate_config()).unwrap();
-        assert_eq!(layer.layer_type(), LayerType::Route);
+        assert_eq!(layer.ltype(), LayerType::Route);
     }
 
     #[test]

@@ -98,12 +98,16 @@ impl Engine for CUDNNEngine {
         Ok(())
     }
 
-    fn input_bindings(&self) -> Bindings {
-        self.inputs.clone()
+    fn inputs(&self) -> Vec<String> {
+        self.inputs.keys().cloned().collect()
     }
 
-    fn output_bindings(&self) -> Bindings {
-        self.outputs.clone()
+    fn input_binding(&self, name: &String) -> Option<Rc<RefCell<DevicePtr>>> {
+        self.inputs.get(name).map(|x| {x.clone()})
+    }
+
+    fn output_binding(&self, name: &String) -> Option<Rc<RefCell<DevicePtr>>> {
+        self.outputs.get(name).map(|x| {x.clone()})
     }
 
     fn add_detections_parser(&mut self, binding_name: &String, parser: Box<dyn DetectionsParser>) {
@@ -116,9 +120,5 @@ impl Engine for CUDNNEngine {
 
     fn detection_parsers(&self) -> &HashMap<String, Box<dyn DetectionsParser>> {
         &self.det_parsers
-    }
-
-    fn dtype(&self) -> cudnnDataType {
-        self.data_type.clone()
     }
 }

@@ -13,7 +13,7 @@ typedef enum CustomActivationType_t {
     MISH = 1,
 } CustomActivationType;
 
-class ActivationPlugin : public IPluginV2
+class ActivationPlugin : public IPluginV2Ext
 {
 public:
     ActivationPlugin(const std::string name, CustomActivationType type);
@@ -54,11 +54,30 @@ public:
 
     void destroy() noexcept override;
 
-    nvinfer1::IPluginV2* clone() const noexcept override;
+    nvinfer1::IPluginV2Ext* clone() const noexcept override;
 
     void setPluginNamespace(const char* pluginNamespace) noexcept override;
 
     const char* getPluginNamespace() const noexcept override;
+
+    // PluginV2Ext
+    nvinfer1::DataType getOutputDataType(int32_t index, nvinfer1::DataType const *inputTypes, int32_t nbInputs) const noexcept override;
+
+    bool isOutputBroadcastAcrossBatch (int32_t outputIndex, bool const *inputIsBroadcasted, int32_t nbInputs) const noexcept override;
+
+    bool canBroadcastInputAcrossBatch (int32_t inputIndex) const noexcept override;
+
+    void configurePlugin (Dims const *inputDims, 
+        int32_t nbInputs, 
+        Dims const *outputDims, 
+        int32_t nbOutputs, 
+        DataType const *inputTypes, 
+        DataType const *outputTypes, 
+        bool const *inputIsBroadcast, 
+        bool const *outputIsBroadcast,
+        PluginFormat floatFormat, 
+        int32_t maxBatchSize
+    ) noexcept override;
 
 private:
     const std::string mLayerName;
@@ -66,7 +85,6 @@ private:
     DataType mOpType;
     size_t mInputVolume;
     std::string mNamespace;
-    cudaError_t (*inference_call)(cudaStream_t, size_t, const void*, void*);
 };
 
 class ActivationCreator: public IPluginCreator {

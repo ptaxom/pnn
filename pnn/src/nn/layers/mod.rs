@@ -28,7 +28,7 @@ pub trait Layer {
 
     fn infer_shape(&mut self, input_shapes: Vec<Rc<dyn Shape>>) -> Result<(), ShapeError>;
 
-    fn layer_type(&self) -> LayerType;
+    fn ltype(&self) -> LayerType;
 
     fn input_indices(&self, position: usize) -> Result<Vec<usize>, BuildError> {
         if position == 0 {

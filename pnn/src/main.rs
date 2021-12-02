@@ -43,7 +43,7 @@ fn main() {
         &String::from("../models/yolov4-csp.weights"),
         &String::from("./cfgs/tests/coco.names"),
         &cudnnDataType::HALF,
-        1,
+        4,
         0.3,
         0.3
     ).unwrap();

@@ -187,8 +187,8 @@ impl TRTBuilder {
         }
     }
 
-    pub fn build(&mut self, avg_iters: usize, min_iters: usize, engine_path: String) -> Result<(), BuildError> {
-        let name = std::ffi::CString::new(engine_path).unwrap();
+    pub fn build(&mut self, avg_iters: usize, min_iters: usize, engine_path: &String) -> Result<(), BuildError> {
+        let name = std::ffi::CString::new(engine_path.clone()).unwrap();
         unsafe {
             let res = pnn_sys::builder_build(
                 self.builder,
@@ -223,8 +223,6 @@ impl Drop for TRTBuilder {
 }
 
 pub struct TRTEngine {
-    // datatype
-    data_type: cudnnDataType,
     // Batchsize
     batchsize: usize,
     // Inputs
@@ -232,25 +230,88 @@ pub struct TRTEngine {
     // Outputs
     outputs: Bindings,
     // Parsers for detections
-    det_parsers: HashMap<String, Box<dyn DetectionsParser>>
+    det_parsers: HashMap<String, Box<dyn DetectionsParser>>,
+    // Engine itselft
+    engine: *mut c_void,
+    // Cuda stream for inference
+    stream: crate::cudnn::cudaStream_t,
+    // Shapes for bindings, // TODO
 }
 
 impl TRTEngine {
+    pub fn new(engine_path: &String) -> Result<TRTEngine, RuntimeError> {
+        let stream = crate::cudnn::cudaStreamCreate().map_err(|e| {RuntimeError::Cuda(e)})?;
+        let mut inputs = HashMap::new();
+        let mut outputs = HashMap::new();
+        let det_parsers = HashMap::new();
+        
+        let mut engine = std::ptr::null_mut();
+        unsafe {
+            let cpath = std::ffi::CString::new(engine_path.clone()).unwrap();
+            engine = pnn_sys::engine_create(cpath.as_ptr(), stream);
+        }
+        if engine == std::ptr::null_mut() {
+            return Err(RuntimeError::Other(String::from("Couldnt create TRTEngine")))
+        }
+        let batchsize = unsafe { pnn_sys::engine_batchsize(engine)};
 
+        let n_bindings = unsafe { pnn_sys::engine_n_bindings(engine)};
+
+        for i in 0..n_bindings {
+            let info: pnn_sys::BindingInfo;
+            unsafe {
+                info = pnn_sys::engine_get_info(engine, i);
+            }
+            use std::ffi::{CStr, CString};
+            let c_name: &CStr = unsafe {CStr::from_ptr(info.name)};
+            let name = c_name.to_str().unwrap().to_owned();
+
+            let size = info.batchsize * info.channels * info.height * info.width;
+            let dev_ptr = DevicePtr::new(cudnnDataType::FLOAT, size)?;
+            unsafe {
+                pnn_sys::engine_add_ptr(engine, dev_ptr.ptr());
+            }
+
+            let dev_memory = Rc::new(RefCell::new(dev_ptr));
+            if info.is_input != 0 {
+                inputs.insert(name, dev_memory);
+            } else {
+                outputs.insert(name, dev_memory);
+            }
+        }
+
+        Ok(TRTEngine{stream, inputs, outputs, det_parsers, engine, batchsize})
+    } 
+}
+
+impl Drop for TRTEngine {
+    fn drop(&mut self) {
+        unsafe {
+            pnn_sys::engine_destroy(self.engine);
+        }
+        crate::cudnn::cudaStreamDestroy(self.stream).unwrap();
+    }
 }
 
 impl Engine for TRTEngine {
 
     fn forward(&mut self) -> Result<(), RuntimeError> {
+        unsafe {
+            pnn_sys::engine_forward(self.engine)
+        }
         Ok(())
     }
 
-    fn input_bindings(&self) -> Bindings {
-        self.inputs.clone()
+    fn inputs(&self) -> Vec<String> {
+        self.inputs.keys().cloned().collect()
     }
 
-    fn output_bindings(&self) -> Bindings {
-        self.outputs.clone()
+    fn input_binding(&self, name: &String) -> Option<Rc<RefCell<DevicePtr>>> {
+        self.inputs.get(name).map(|x| {x.clone()})
+    }
+
+    fn output_binding(&self, name: &String) -> Option<Rc<RefCell<DevicePtr>>> {
+        self.outputs.get(name).map(|x| {x.clone()})
     }
 
     fn add_detections_parser(&mut self, binding_name: &String, parser: Box<dyn DetectionsParser>) {
@@ -263,9 +324,5 @@ impl Engine for TRTEngine {
 
     fn detection_parsers(&self) -> &HashMap<String, Box<dyn DetectionsParser>> {
         &self.det_parsers
-    }
-
-    fn dtype(&self) -> cudnnDataType {
-        self.data_type.clone()
     }
 }

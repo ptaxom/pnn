@@ -83,3 +83,18 @@ void init_plugins() {
         ACTIVATION_REGISTERED = true;
     }
 }
+
+std::string dim2str(const nvinfer1::Dims &obj) {
+    std::stringstream os;
+    for(int i = 0; i < obj.nbDims - 1; i++)
+        os << obj.d[i] << "x";
+    os << obj.d[obj.nbDims - 1];
+    return os.str();
+}
+
+size_t dim2size(const nvinfer1::Dims &obj) {
+    size_t volume = 1;
+    for(int i = 0; i < obj.nbDims; i++)
+        volume *= obj.d[i];
+    return volume;
+}

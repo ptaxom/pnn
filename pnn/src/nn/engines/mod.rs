@@ -18,9 +18,11 @@ pub trait Engine {
 
     fn forward(&mut self) -> Result<(), RuntimeError>;
 
-    fn input_bindings(&self) -> HashMap<String, Rc<RefCell<DevicePtr>>>;
+    fn inputs(&self) -> Vec<String>;
 
-    fn output_bindings(&self) -> HashMap<String, Rc<RefCell<DevicePtr>>>;
+    fn input_binding(&self, name: &String) -> Option<Rc<RefCell<DevicePtr>>>;
+
+    fn output_binding(&self, name: &String) -> Option<Rc<RefCell<DevicePtr>>>;
 
     fn add_detections_parser(&mut self, binding_name: &String, parser: Box<dyn DetectionsParser>);
 
@@ -42,8 +44,6 @@ pub trait Engine {
         }
         Ok(predictions.iter().map(|x| {BoundingBox::nms(x, nms_threshold)}).collect())
     }
-
-    fn dtype(&self) -> cudnnDataType;
 }
 
 mod yolo;

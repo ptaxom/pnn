@@ -87,7 +87,7 @@ impl Layer for ShortcutLayer {
         Ok(Box::new(ShortcutLayer{name, shape, from, activation}))
     }
 
-    fn layer_type(&self) -> LayerType {
+    fn ltype(&self) -> LayerType {
         LayerType::Shortcut
     }
 
@@ -264,9 +264,9 @@ mod tests {
     }
 
     #[test]
-    fn test_layer_type() {
+    fn test_ltype() {
         let layer = ShortcutLayer::from_config(generate_config()).unwrap();
-        assert_eq!(layer.layer_type(), LayerType::Shortcut);
+        assert_eq!(layer.ltype(), LayerType::Shortcut);
     }
 
     #[test]

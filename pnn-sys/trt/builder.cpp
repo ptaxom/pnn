@@ -6,13 +6,6 @@
 
 #include "utils.hpp"
 
-std::string dim2str(const Dims &obj) {
-    std::stringstream os;
-    for(int i = 0; i < obj.nbDims - 1; i++)
-        os << obj.d[i] << "x";
-    os << obj.d[obj.nbDims - 1];
-    return os.str();
-}
 
 TRTBuilder::TRTBuilder(cudnnDataType_t dataType, int32_t maxBatchsize): mBatchSize(maxBatchsize) {
     init_plugins();
@@ -38,10 +31,10 @@ TRTBuilder::TRTBuilder(cudnnDataType_t dataType, int32_t maxBatchsize): mBatchSi
     mBuilderConfig = std::unique_ptr<IBuilderConfig>(mBuilder->createBuilderConfig());
     if (!mBuilder) FatalError("Couldnt creater IBuilderConfig");
 
-    mNetworkDefenition = std::unique_ptr<INetworkDefinition>(mBuilder->createNetworkV2(0));
-    if (!mBuilder) FatalError("Couldnt creater INetworkDefinition");
+    auto flag = 1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
 
-    mBuilderConfig->setMaxWorkspaceSize(1U << 20);
+    mNetworkDefenition = std::unique_ptr<INetworkDefinition>(mBuilder->createNetworkV2(flag));
+    if (!mBuilder) FatalError("Couldnt creater INetworkDefinition");
 
     mBuilder->setMaxBatchSize(maxBatchsize);
     if (mDataType == DataType::kHALF) {
@@ -189,7 +182,7 @@ int TRTBuilder::addRoute(const std::vector<size_t> &input_ids) {
 
 int TRTBuilder::addInput(const std::string &name, int32_t channels, int32_t height, int32_t width) {
     Dims dim{4, {mBatchSize, channels, height, width}};
-    ITensor* input = mNetworkDefenition->addInput(name.c_str(), mDataType, dim);
+    ITensor* input = mNetworkDefenition->addInput(name.c_str(), DataType::kFLOAT, dim);
     if (!input) return -1;
 
     ILayer* identety = mNetworkDefenition->addIdentity(*input);
@@ -200,6 +193,8 @@ int TRTBuilder::addInput(const std::string &name, int32_t channels, int32_t heig
 
 void TRTBuilder::addYolo(size_t input_id, const std::string &name) {
     ITensor* tensor = mLayers[input_id]->getOutput(0);
+    tensor->setType(DataType::kFLOAT);
+    tensor->setName(name.c_str());
     mNetworkDefenition->markOutput(*tensor);
 }
 
@@ -230,7 +225,7 @@ bool TRTBuilder::buildEngine(int32_t avgIters, int32_t minIters, const std::stri
         output->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
     }
 
-    mBuilderConfig->setMaxWorkspaceSize(1U << 20);
+    mBuilderConfig->setMaxWorkspaceSize(1U << 30);
     mBuilderConfig->setFlag(BuilderFlag::kREFIT);
     mBuilderConfig->setProfilingVerbosity(ProfilingVerbosity::kLAYER_NAMES_ONLY);
     mBuilderConfig->setAvgTimingIterations(avgIters);

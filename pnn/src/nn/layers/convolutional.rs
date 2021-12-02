@@ -149,7 +149,7 @@ impl Layer for ConvolutionalLayer {
         }))
     }
 
-    fn layer_type(&self) -> LayerType {
+    fn ltype(&self) -> LayerType {
         LayerType::Convolutional
     }
 
@@ -443,9 +443,9 @@ mod tests {
     }
 
     #[test]
-    fn test_layer_type() {
+    fn test_ltype() {
         let layer = ConvolutionalLayer::from_config(generate_config()).unwrap();
-        assert_eq!(layer.layer_type(), LayerType::Convolutional);
+        assert_eq!(layer.ltype(), LayerType::Convolutional);
     }
 
 }

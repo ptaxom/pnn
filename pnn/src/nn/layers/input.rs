@@ -72,7 +72,7 @@ impl Layer for InputLayer {
         Ok(Box::new(InputLayer{name, shape, dims}))
     }
 
-    fn layer_type(&self) -> LayerType {
+    fn ltype(&self) -> LayerType {
         LayerType::Input
     }
 
@@ -189,13 +189,13 @@ mod tests {
     }
 
     #[test]
-    fn test_layer_type() {
+    fn test_ltype() {
         let mut config = generate_config();
         config.insert(String::from("height"), String::from("5"));
         config.insert(String::from("width"), String::from("6"));
         let layer = InputLayer::from_config(config).unwrap();
 
-        assert_eq!(layer.layer_type(), LayerType::Input);
+        assert_eq!(layer.ltype(), LayerType::Input);
     }
 
     #[test]

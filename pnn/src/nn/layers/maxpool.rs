@@ -101,7 +101,7 @@ impl Layer for MaxpoolLayer {
     }
 
 
-    fn layer_type(&self) -> LayerType {
+    fn ltype(&self) -> LayerType {
         LayerType::Maxpool
     }
 
@@ -197,9 +197,9 @@ mod tests {
 
 
     #[test]
-    fn test_layer_type() {
+    fn test_ltype() {
         let layer = MaxpoolLayer::from_config(generate_config()).unwrap();
-        assert_eq!(layer.layer_type(), LayerType::Maxpool);
+        assert_eq!(layer.ltype(), LayerType::Maxpool);
     }
 
     #[test]

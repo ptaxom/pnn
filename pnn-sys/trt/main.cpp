@@ -10,6 +10,6 @@ int main() {
     bool p = builder.buildEngine(8, 1, "test.engine");
     printf("%ld\n", p);
 
-    // TRTEngine engine("test.engine");
+    // TRTEngine engine("test.engine", 0);
     
 }

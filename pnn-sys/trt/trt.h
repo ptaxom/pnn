@@ -3,6 +3,8 @@
 #include <NvInfer.h>
 #include <cudnn.h>
 
+#include "structs.h"
+
 extern "C" {
     void* builder_create(cudnnDataType_t dataType, size_t maxBatchsize);
 
@@ -35,4 +37,18 @@ extern "C" {
 
     int   builder_build(void* builder, size_t avgIters, size_t minIters, const char* engine_path);
 
+
+    void* engine_create(const char* engine_path, cudaStream_t stream);
+
+    void  engine_destroy(void* engine);
+
+    size_t engine_batchsize(void* engine);
+
+    size_t engine_n_bindings(void* engine);
+
+    BindingInfo engine_get_info(void* engine, size_t index);
+
+    void engine_add_ptr(void* engine, void* ptr);
+
+    void engine_forward(void* engine);
 }

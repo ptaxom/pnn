@@ -821,6 +821,32 @@ pub fn cudnnGetStream(handle: cudnnHandle_t) -> Result<cudaStream_t, cudnnError>
     }
 }
 
+pub fn cudaStreamCreate() -> Result<cudaStream_t, cudaError> {
+    use pnn_sys::cudaStreamCreate;
+    use std::mem::MaybeUninit;
+    unsafe {
+        let mut stream: cudaStream_t = MaybeUninit::zeroed().assume_init();
+        let res = cudaStreamCreate(&mut stream as *mut cudaStream_t);
+        match  res{
+            0 => Ok(stream),
+            x => Err(cudaError::from(x))
+        }
+    }
+}
+
+pub fn cudaStreamDestroy(stream: cudaStream_t) -> Result<(), cudaError> {
+    use pnn_sys::cudaStreamDestroy;
+
+    unsafe {
+        let res = cudaStreamDestroy(stream);
+        match  res{
+            0 => Ok(()),
+            x => Err(cudaError::from(x))
+        }
+    }
+}
+
+
 pub fn cudaMemcpyAsync(
     dst: *mut c_void,
     src: *const c_void,

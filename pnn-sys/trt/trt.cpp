@@ -63,3 +63,31 @@ int builder_add_pooling(void* builder, size_t input_id, size_t stride, size_t wi
 int builder_build(void* builder, size_t avgIters, size_t minIters, const char* engine_path) {
     return static_cast<TRTBuilder*>(builder)->buildEngine(avgIters, minIters, engine_path);
 }
+
+void* engine_create(const char* engine_path, cudaStream_t stream) {
+    return new TRTEngine(engine_path, stream);
+}
+
+void  engine_destroy(void* engine) {
+    delete static_cast<TRTEngine*>(engine);
+}
+
+size_t engine_batchsize(void* engine) {
+    return static_cast<TRTEngine*>(engine)->batchsize();
+}
+
+BindingInfo engine_get_info(void* engine, size_t index) {
+    return static_cast<TRTEngine*>(engine)->getBindingInfo(index);
+}
+
+void engine_add_ptr(void* engine, void* ptr) {
+    static_cast<TRTEngine*>(engine)->addBindingPtr(ptr);
+}
+
+void engine_forward(void* engine) {
+    static_cast<TRTEngine*>(engine)->forward();
+}
+
+size_t engine_n_bindings(void* engine) {
+    return static_cast<TRTEngine*>(engine)->getNbBindings();
+}
