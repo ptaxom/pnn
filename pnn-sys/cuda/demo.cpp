@@ -1,9 +1,10 @@
 #include "kernels.h"
+
 #include <queue>
 #include <chrono>
 #include <thread>
 #include <condition_variable>
-
+#include <memory>
 
 
 class Stopwatch {
@@ -25,22 +26,31 @@ private:
     std::chrono::steady_clock::time_point end_;
 };
 
+
+struct Task {
+    size_t id;
+    cv::Mat original;
+    std::vector<BoundingBox> boxes;
+};
+
+using TaskPtr = std::unique_ptr<Task>;
+
 class DataLoader {
 public:
-    virtual cv::Mat* load() = 0;
+    virtual TaskPtr load() = 0;
     
     virtual size_t size() = 0;
 };
 
 class VideoLoader: public DataLoader {
 public:
-    virtual cv::Mat* load() {
-        cv::Mat* frame = new cv::Mat;
-        if (!capture_.read(*frame)) {
+    virtual TaskPtr load() {
+        cv::Mat frame;
+        if (!capture_.read(frame)) {
             return nullptr;
         }
         loaded_++;
-        return frame;
+        return std::unique_ptr<Task>(new Task{loaded_, std::move(frame), std::vector<BoundingBox>()});
     }
 
     VideoLoader(const std::string &video_path) : DataLoader() {
@@ -64,14 +74,14 @@ private:
 
 class DataProcesser {
 public:
-    virtual bool postprocess(cv::Mat *image, std::vector<BoundingBox> boxes) = 0;
+    virtual bool postprocess(cv::Mat &image, std::vector<BoundingBox> &boxes) = 0;
 };
 
 class DetectionRenderer : public DataProcesser {
 public:
-    virtual bool postprocess(cv::Mat *image, std::vector<BoundingBox> boxes) {
-        draw_bboxes(*image, boxes, class_names_);
-        cv::imshow("demo", *image);
+    virtual bool postprocess(cv::Mat &image, std::vector<BoundingBox> &boxes) {
+        draw_bboxes(image, boxes, class_names_);
+        cv::imshow("demo", image);
         char key = (char)cv::waitKey(1);
         return key == 'q';
     }
@@ -84,15 +94,15 @@ private:
 
 class FileRenderer : public DataProcesser {
 public:
-    virtual bool postprocess(cv::Mat *image, std::vector<BoundingBox> boxes) {
-        draw_bboxes(*image, boxes, class_names_);
+    virtual bool postprocess(cv::Mat image, std::vector<BoundingBox> &boxes) {
+        draw_bboxes(image, boxes, class_names_);
         if (!writer_) {
-            writer_ = new cv::VideoWriter("../models/demo.avi", cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), 25, image->size());
+            writer_ = new cv::VideoWriter("../models/demo.avi", cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), 25, image.size());
             if (!writer_ || !writer_->isOpened()) {
                 return true;
             }
         }
-        writer_->write(*image);
+        writer_->write(image);
         return false;
     }
 
@@ -115,12 +125,12 @@ class Queue{
 public:
     Queue(const size_t max_size=0): max_size_(max_size), poisoned_(false) {}
 
-    void push(const T &item) {
+    void push(T &item) {
         std::unique_lock<std::mutex> lk(mutex_);
         if (max_size_ > 0) {
             cv_.wait(lk, [this]{return queue_.size() < max_size_;});
         }
-        queue_.push(item);
+        queue_.push(std::move(item));
         lk.unlock();
         cv_.notify_one();
     }
@@ -130,7 +140,7 @@ public:
         cv_.wait(lk, [this]{return queue_.size() > 0 || poisoned();});
         if (poisoned()) 
             throw std::runtime_error("Waiting on poisoned queue");
-        T item = queue_.front();
+        T item = std::move(queue_.front());
         queue_.pop();
         lk.unlock();
         cv_.notify_one();
@@ -146,12 +156,6 @@ public:
 
     bool is_poisoned() {
         std::lock_guard<std::mutex> lock(mutex_);
-        return poisoned();
-    }
-
-    bool vis_poisoned() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        printf("%d %d\n", poisoned_, queue_.size());
         return poisoned();
     }
 
@@ -270,9 +274,9 @@ private:
         }
     }
 
-    std::vector<cv::Mat> preprocess(cv::Mat *frame) {
+    std::pair<TaskPtr, std::vector<cv::Mat>> preprocess(TaskPtr &task) {
         cv::Mat preprocessed_image;
-        cv::resize(*frame, preprocessed_image, cv::Size(width_, height_));
+        cv::resize(task->original, preprocessed_image, cv::Size(width_, height_));
         if (preprocessed_image.empty()) exit(101);
 
         preprocessed_image.convertTo(preprocessed_image, CV_32FC3, 1 / 255.0);
@@ -280,11 +284,11 @@ private:
 
         std::vector<cv::Mat> channels;
         cv::split(preprocessed_image, channels);
-        return channels;
+        return std::make_pair(std::move(task), channels);
     }
 
     void preprocess_thread() {
-        std::queue<std::pair<std::vector<cv::Mat>, cv::Mat*>> processed;
+        std::queue<std::pair<TaskPtr, std::vector<cv::Mat>>> processed;
         bool poisoned = false;
         size_t channel_size = width_ * height_;
 
@@ -292,15 +296,13 @@ private:
             if (loaded_queue_.is_poisoned()) {
                 poisoned = true;
             } else {
-                cv::Mat *frame;
+                TaskPtr task;
                 try {
-                    frame = loaded_queue_.pop();
+                    task = loaded_queue_.pop();
                 } catch (...) {
                     poisoned = true;
                 }
-                processed.push(
-                    std::make_pair(preprocess(frame), frame)
-                );
+                processed.push(preprocess(task));
             }
             
             if (poisoned || processed.size() >= batchsize_) {
@@ -309,14 +311,14 @@ private:
                 size_t offset = 0;
 
                 while(processed.size() > 0) {
-                    auto pair = processed.front();
+                    auto pair = std::move(processed.front());
                     processed.pop();
                     for(int channel = 0; channel < 3; channel++)
                     {
-                        cudaMemcpy(inp_ptr_ + offset, pair.first[2 - channel].data, channel_size  * sizeof(float), cudaMemcpyHostToDevice);
+                        cudaMemcpy(inp_ptr_ + offset, pair.second[2 - channel].data, channel_size  * sizeof(float), cudaMemcpyHostToDevice);
                         offset += channel_size;
                     }
-                    downloaded_queue_.push(pair.second);
+                    downloaded_queue_.push(std::move(pair.first));
                 }
                 downloaded_ = true;
                 if (poisoned) {
@@ -344,10 +346,10 @@ private:
             
             size_t offset = 0, i = 0;
             while (downloaded_queue_.size()) {
-                cv::Mat* frame = downloaded_queue_.front();
+                auto task = std::move(downloaded_queue_.front());
                 downloaded_queue_.pop();
-                auto bboxes = load_bboxes(n_boxes_[i], boxes + offset);
-                processed_queue_.push(std::make_pair(frame, bboxes));
+                task->boxes = load_bboxes(n_boxes_[i], boxes + offset);
+                processed_queue_.push(task);
                 offset += n_boxes_[i+1];
             }
             free(boxes);
@@ -364,15 +366,15 @@ private:
 
     void process_thread() {
         while (!processed_queue_.is_poisoned()) {
-            std::pair<cv::Mat*,std::vector<BoundingBox>> data;
+            TaskPtr task;
             try {
-                data = processed_queue_.pop();
+                task = std::move(processed_queue_.pop());
             } catch (...) {
                 exited_ = true;
                 break;
             }
-            exited_ = processer_->postprocess(data.first, data.second);
-            delete data.first;
+            exited_ = processer_->postprocess(task->original, task->boxes);
+            task.reset();
             if (exited_)
                 break;
         }
@@ -390,9 +392,9 @@ private:
     size_t *n_boxes_;
     BoundingBox* (*inference_call_)(void* model, size_t *n_boxes, double *infer_time);
     
-    Queue<cv::Mat*> loaded_queue_;
-    std::queue<cv::Mat*> downloaded_queue_;
-    Queue<std::pair<cv::Mat*,std::vector<BoundingBox>>> processed_queue_;
+    Queue<TaskPtr> loaded_queue_;
+    std::queue<TaskPtr> downloaded_queue_;
+    Queue<TaskPtr> processed_queue_;
     
     std::mutex inference_mutex_;
     std::condition_variable inference_cv_;

@@ -319,7 +319,7 @@ impl Network {
         self.set_batchsize(batchsize)?;
         let engine_path: String = engine_path.unwrap();
 
-        let rebuild = true;
+        let rebuild = false;
         if rebuild {
             self.load_darknet_weights(weights_path)?;
             let builder = Rc::new(RefCell::new(TRTBuilder::new(data_type.clone(), self.batchsize.unwrap(), self.size)?));
