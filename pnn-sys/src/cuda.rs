@@ -14,12 +14,12 @@ impl InferStats {
         (self.total_frames as f64) / (self.total_time / 1000.)
     }
 
-    pub fn infer_fps(&self) -> f64 {
-        (self.total_frames as f64) / (self.inference_time / 1000.)
+    pub fn infer_fps(&self, batchsize: usize) -> f64 {
+        (self.total_frames as f64) / (self.inference_time / 1000. / batchsize as f64)
     }
 
-    pub fn nms_fps(&self) -> f64 {
-        (self.total_frames as f64) / (self.inference_with_nms / 1000.)
+    pub fn nms_fps(&self, batchsize: usize) -> f64 {
+        (self.total_frames as f64) / (self.inference_with_nms / 1000. / batchsize as f64)
     }
 
     pub fn total_frames(&self) -> usize {

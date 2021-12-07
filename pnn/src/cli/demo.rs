@@ -91,7 +91,7 @@ pub fn demo(video_path: &String,
     println!("Batchsize:     {}", batchsize);
     println!("Total frames:  {}", stats.total_frames());
     println!("FPS:           {}", stats.fps());
-    println!("INF+NMS FPS:   {}", stats.nms_fps());
-    println!("Inference FPS: {}", stats.infer_fps());
+    println!("INF+NMS FPS:   {}", stats.nms_fps(batchsize));
+    println!("Inference FPS: {}", stats.infer_fps(batchsize));
     Ok(())
 }
