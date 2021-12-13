@@ -39,16 +39,19 @@ extern "C" fn infer_call(net: *mut c_void,n_boxes: *mut usize, infer_time: *mut 
     }
 }
 
-pub fn demo(video_path: &String, 
-            config_file: &String,
-            weight_path: &String,
-            classes_file: &String, 
-            data_type: &cudnnDataType,
+pub fn demo(video_path: String, 
+            config_file: String,
+            weight_path: String,
+            classes_file: String, 
+            half: bool,
             batchsize: usize,
             threshold: f32, 
-            nms_threshold: f32
+            nms_threshold: f32,
+            show: bool,
+            output: Option<String>,
+            trt: bool
     ) -> Result<(), BuildError> {
-        let classes = crate::parsers::load_classes(classes_file).map_err( |e| {
+        let classes = crate::parsers::load_classes(&classes_file).map_err( |e| {
             BuildError::Io(e)
         })?;
 
@@ -61,9 +64,14 @@ pub fn demo(video_path: &String,
         }).collect();
         ffi_ptrs.push(std::ptr::null());
 
-        let mut net = crate::nn::Network::from_darknet(config_file)?;
-        // net.build_cudnn(batchsize, data_type.clone(), Some(weight_path.clone()))?;
-        net.build_trt(batchsize, data_type.clone(), weight_path, Some(String::from("yolo.engine")))?;
+        let mut data_type = cudnnDataType::FLOAT;
+        let mut net = crate::nn::Network::from_darknet(&config_file)?;
+        if !trt {
+            data_type = if half {cudnnDataType::HALF} else {cudnnDataType::FLOAT};
+            net.build_cudnn(batchsize, data_type.clone(), Some(weight_path.clone()))?;
+        } else {
+            net.load_trt(&weight_path)?;
+        }
         // Warm-up
         for _ in 0..5 {
             net.forward().map_err(|e| {

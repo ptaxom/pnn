@@ -312,6 +312,28 @@ impl Network {
         Ok(())
     }
 
+    pub fn load_trt(&mut self, engine_path: &String) -> Result<(), BuildError> {
+        let mut engine = TRTEngine::new(engine_path).map_err(|e| {
+            BuildError::Runtime(e)
+        })?;
+        for i in 0..self.layers.len() {
+            let layer = self.layers[i].borrow();
+            if layer.ltype() == LayerType::Yolo {
+                let head = layer.as_any().downcast_ref::<YoloLayer>().unwrap();
+                let name = head.name();
+                let binding = engine.output_binding(&name).unwrap();
+                engine.add_detections_parser(
+                    &name,
+                    head.get_parser(self.size, binding)
+                );
+
+            }
+            
+        }
+        self.engine = Some(Rc::new(RefCell::new(engine)));
+        Ok(())
+    }
+
     pub fn build_trt(&mut self, batchsize: usize, data_type: cudnnDataType, weights_path: &String, engine_path: Option<String>) -> Result<(), BuildError> {
         if self.batchsize.is_some() || self.engine.is_some() {
             return Err(BuildError::Runtime(RuntimeError::Other(String::from("Engine is builded"))))
@@ -340,24 +362,7 @@ impl Network {
             }
             builder.borrow_mut().build(1, 1, &engine_path)?;
         }
-        let mut engine = TRTEngine::new(&engine_path).map_err(|e| {
-            BuildError::Runtime(e)
-        })?;
-        for i in 0..self.layers.len() {
-            let layer = self.layers[i].borrow();
-            if layer.ltype() == LayerType::Yolo {
-                let head = layer.as_any().downcast_ref::<YoloLayer>().unwrap();
-                let name = head.name();
-                let binding = engine.output_binding(&name).unwrap();
-                engine.add_detections_parser(
-                    &name,
-                    head.get_parser(self.size, binding)
-                );
 
-            }
-            
-        }
-        self.engine = Some(Rc::new(RefCell::new(engine)));
         Ok(())
     }
 
