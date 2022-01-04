@@ -5,20 +5,13 @@ use std::{
     sync::atomic::{Ordering},
     rc::Rc,
     cell::RefCell,
-    sync::mpsc::{
-        channel,
-        Sender,
-        Receiver
-    },
-    fmt
-
 };
 
 use crate::nn::shape::*;
 use crate::nn::{Layer, LayerType, errors::*, BuildInformation, DetectionsParser, YoloHeadParser};
 use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positive, parse_list_field};
-use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
-use crate::nn::ops::{LayerOp, OutputTensor, ConvertOp};
+use crate::cudnn::{cudnnDataType, Tensor, DevicePtr};
+use crate::nn::ops::{LayerOp, ConvertOp};
 use crate::nn::{CUDNNEngine, TRTBuilder, Engine};
 
 //Yolo head layer

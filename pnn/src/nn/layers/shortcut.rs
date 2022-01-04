@@ -11,8 +11,7 @@ use std::{
 use crate::nn::shape::*;
 use crate::nn::{Layer, LayerType, errors::*, ActivationType, BuildInformation};
 use crate::parsers::{DeserializationError, parse_list_field};
-use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
-use crate::nn::ops::{LayerOp, OutputTensor, InputTensor, ShortcutOp, ActivationOp};
+use crate::nn::ops::{LayerOp, InputTensor, ShortcutOp, ActivationOp};
 use crate::nn::{CUDNNEngine, TRTBuilder};
 
 

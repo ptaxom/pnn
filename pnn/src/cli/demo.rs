@@ -1,6 +1,6 @@
 use crate::nn::{BoundingBox, BuildError, Network};
 use crate::cudnn::cudnnDataType;
-use std::os::raw::{c_void, c_int, c_char};
+use std::os::raw::{c_void};
 use std::time::{Instant};
 extern crate libc;
 use std::mem;
@@ -39,16 +39,19 @@ extern "C" fn infer_call(net: *mut c_void,n_boxes: *mut usize, infer_time: *mut 
     }
 }
 
-pub fn demo(video_path: &String, 
-            config_file: &String,
-            weight_path: &String,
-            classes_file: &String, 
-            data_type: &cudnnDataType,
+pub fn demo(video_path: String, 
+            config_file: String,
+            weight_path: String,
+            classes_file: String, 
+            half: bool,
             batchsize: usize,
             threshold: f32, 
-            nms_threshold: f32
+            nms_threshold: f32,
+            show: bool,
+            output: Option<String>,
+            trt: bool
     ) -> Result<(), BuildError> {
-        let classes = crate::parsers::load_classes(classes_file).map_err( |e| {
+        let classes = crate::parsers::load_classes(&classes_file).map_err( |e| {
             BuildError::Io(e)
         })?;
 
@@ -61,9 +64,14 @@ pub fn demo(video_path: &String,
         }).collect();
         ffi_ptrs.push(std::ptr::null());
 
-        let mut net = crate::nn::Network::from_darknet(config_file)?;
-        // net.build_cudnn(batchsize, data_type.clone(), Some(weight_path.clone()))?;
-        net.build_trt(batchsize, data_type.clone(), weight_path, Some(String::from("yolo.engine")))?;
+        let mut data_type = cudnnDataType::FLOAT;
+        let mut net = crate::nn::Network::from_darknet(&config_file)?;
+        if !trt {
+            data_type = if half {cudnnDataType::HALF} else {cudnnDataType::FLOAT};
+            net.build_cudnn(batchsize, data_type.clone(), Some(weight_path.clone()))?;
+        } else {
+            net.load_trt(&weight_path)?;
+        }
         // Warm-up
         for _ in 0..5 {
             net.forward().map_err(|e| {
@@ -71,8 +79,10 @@ pub fn demo(video_path: &String,
             })?;
         }
         let i_ptr = net.get_input_ptr().borrow_mut().ptr() as *mut std::os::raw::c_void;
-        println!("Builded yolo");
+        println!("Loaded yolo engine");
         net.set_detections_ops(threshold, nms_threshold);
+        let c_output_isnull = output.is_none();
+        let c_output_ptr = std::ffi::CString::new(output.unwrap_or(String::from("default.avi"))).unwrap();
         
         let stats;
         unsafe {
@@ -83,7 +93,9 @@ pub fn demo(video_path: &String,
                 net.get_size().0,
                 i_ptr,
                 std::ptr::addr_of!(net) as *mut c_void,
-                infer_call
+                infer_call,
+                if c_output_isnull {std::ptr::null()} else {c_output_ptr.as_ptr()},
+                show
                 );
         }
     println!("Stats for      {}", video_path);

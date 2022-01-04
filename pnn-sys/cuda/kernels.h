@@ -56,7 +56,9 @@ extern "C" {
                  size_t height,
                  void* inp_ptr,
                  void* model_ptr,
-                 BoundingBox* (*infer_call)(void* model, size_t *n_boxes, double *infer_time)
+                 BoundingBox* (*infer_call)(void* model, size_t *n_boxes, double *infer_time),
+                 const char* output_path,
+                 bool show
                  );
 
 }

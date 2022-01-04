@@ -2,7 +2,6 @@ use std::{
     fs::File,
     collections::HashMap,
     io::{Read},
-    error::Error,
     self};
 use regex::Regex;
 
@@ -14,11 +13,11 @@ pub type NNConfig = Vec<HashMap<String, String>>; // Currently support only for 
 
 pub fn parse_file(filename: &str) -> Result<NNConfig, BuildError> {
     let mut file = File::open(filename).map_err(|e| {
-        BuildError::Io(e)
+        BuildError::Io(std::io::Error::new(e.kind(), format!("{}[{}]", &e, &filename)))
     })?;
     let mut lines = String::new();
     file.read_to_string(&mut lines).map_err(|e| {
-        BuildError::Io(e)
+        BuildError::Io(std::io::Error::new(e.kind(), format!("{}[{}]", &e, &filename)))
     })?;
 
     let lines: Vec<String> = lines.split_terminator('\n').into_iter().filter(|l| {
@@ -147,9 +146,13 @@ pub fn load_f32_vec(offset: usize, bytes: &Vec<u8>, n_elements: usize) -> Result
 }
 
 pub fn load_classes(filename: &str) -> Result<Vec<String>, std::io::Error> {
-    let mut file = File::open(filename)?;
+    let mut file = File::open(filename).map_err(|e| {
+        std::io::Error::new(e.kind(), format!("{}[{}]", &e, &filename))
+    })?;
     let mut lines = String::new();
-    file.read_to_string(&mut lines)?;
+    file.read_to_string(&mut lines).map_err(|e| {
+        std::io::Error::new(e.kind(), format!("{}[{}]", &e, &filename))
+    })?;
 
     let lines: Vec<String> = lines.split_terminator('\n').into_iter().map(|l| {
         String::from(l)

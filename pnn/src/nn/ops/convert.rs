@@ -1,10 +1,8 @@
-use crate::cudnn::{Tensor,
+use crate::cudnn::{
     cudnnHandle_t,
     cudnnDataType,
     cudaStream_t,
     cudnnGetStream,
-    DevicePtr,
-    cudaError,
     cvt_data
 };
 use crate::nn::{LayerOp, RuntimeError, InputTensor, OutputTensor};
@@ -12,7 +10,6 @@ use crate::nn::{LayerOp, RuntimeError, InputTensor, OutputTensor};
 
 use std::{
     rc::Rc,
-    cell::RefCell,
     os::raw::{c_void}
 };
 
@@ -94,6 +91,7 @@ mod tests {
     fn base_test() {
         use crate::cudnn::*;
         use crate::nn::LayerShape;
+        use std::cell::RefCell;
 
         let xdtype = cudnnDataType::FLOAT;
         let ydtype = cudnnDataType::HALF;

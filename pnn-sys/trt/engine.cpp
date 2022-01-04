@@ -7,6 +7,7 @@
 using namespace nvinfer1;
 
 TRTEngine::TRTEngine(const std::string &engineFileName, cudaStream_t stream): mStream(stream) {
+    init_plugins();
 
     mRuntime = getIRuntime();
     if (!mRuntime) FatalError("Couldnt acquire IRuntime");
