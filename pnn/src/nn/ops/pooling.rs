@@ -1,24 +1,14 @@
-use crate::cudnn::{Tensor,
+use crate::cudnn::{
     cudnnHandle_t,
     cudnnDataType,
-    DevicePtr,
     cudnnError,
     Scale,
 };
 use crate::nn::{LayerOp, RuntimeError, InputTensor, OutputTensor};
-use pnn_sys::{
-    cudnnPoolingDescriptor_t,
-    cudnnSetPooling2dDescriptor,
-    cudnnGetPooling2dForwardOutputDim,
-    cudnnDestroyPoolingDescriptor,
-    cudnnPoolingForward,
-};
 
 
 use std::{
     rc::Rc,
-    cell::RefCell,
-    mem::MaybeUninit,
     ptr::addr_of,
     os::raw::{c_void, c_int}
 };
@@ -28,7 +18,7 @@ pub struct PoolingOp {
     input_tensor: InputTensor,
     output_tensor: OutputTensor,
     context: Rc<cudnnHandle_t>,
-    desc: cudnnPoolingDescriptor_t,
+    desc: pnn_sys::cudnnPoolingDescriptor_t,
 
     scales: Scale
 }
@@ -57,6 +47,7 @@ impl PoolingOp {
         if !SUPPORTED_DTYPES.contains(data_type) {
             return Err(RuntimeError::Other(String::from("Not supported type for pooling")))
         }
+        use pnn_sys::cudnnPoolingDescriptor_t;
         let mut desc: cudnnPoolingDescriptor_t = std::ptr::null_mut() as cudnnPoolingDescriptor_t;
         unsafe {
             let res = pnn_sys::cudnnCreatePoolingDescriptor(&mut desc as *mut cudnnPoolingDescriptor_t);
@@ -154,6 +145,7 @@ mod tests {
     fn base_test() {
         use crate::cudnn::*;
         use crate::nn::LayerShape;
+        use std::cell::RefCell;
 
         let dtype = cudnnDataType::FLOAT;
         let x_data = Rc::new(RefCell::new(DevicePtr::new(dtype.clone(), 4 * 512 * 16 * 16).unwrap()));

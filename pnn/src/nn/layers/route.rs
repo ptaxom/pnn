@@ -10,9 +10,9 @@ use std::{
 use crate::nn::shape::*;
 use crate::nn::{Layer, LayerType, errors::*, BuildInformation};
 use crate::parsers::{DeserializationError, parse_list_field};
-use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
+use crate::cudnn::{Tensor, DevicePtr};
 use crate::nn::{CUDNNEngine, TRTBuilder};
-use crate::nn::ops::{LayerOp, OutputTensor, InputTensor, RouteOp};
+use crate::nn::ops::{LayerOp, InputTensor, RouteOp};
 
 
 //Concat layers across filters or refer previous layer

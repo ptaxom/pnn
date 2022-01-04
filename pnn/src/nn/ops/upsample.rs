@@ -1,9 +1,8 @@
-use crate::cudnn::{Tensor,
+use crate::cudnn::{
     cudnnHandle_t,
     cudnnDataType,
     cudaStream_t,
     cudnnGetStream,
-    DevicePtr,
     cudaError
 };
 use crate::nn::{LayerOp, RuntimeError, InputTensor, OutputTensor};
@@ -11,10 +10,7 @@ use crate::nn::{LayerOp, RuntimeError, InputTensor, OutputTensor};
 
 use std::{
     rc::Rc,
-    cell::RefCell,
-    mem::MaybeUninit,
-    ptr::addr_of,
-    os::raw::{c_void, c_int}
+    os::raw::{c_void}
 };
 
 
@@ -112,12 +108,16 @@ mod tests {
     fn base_test() {
         use crate::cudnn::*;
         use crate::nn::LayerShape;
+        use std::{
+            rc::Rc,
+            cell::RefCell
+        };
 
-        let dtype = cudnnDataType::FLOAT;
-        let x_data = Rc::new(RefCell::new(DevicePtr::new(dtype.clone(), 4 * 512 * 16 * 16).unwrap()));
+        const DTYPE: cudnnDataType_t = cudnnDataType::FLOAT;
+        let x_data = Rc::new(RefCell::new(DevicePtr::new(DTYPE.clone(), 4 * 512 * 16 * 16).unwrap()));
         let inp = Rc::new(RefCell::new(Tensor::new(Box::new(LayerShape::from_nchw(4, 512, 16, 16)), x_data.clone()).unwrap()));
 
-        let y_data = Rc::new(RefCell::new(DevicePtr::new(dtype.clone(), 4 * 512 * 32 * 32).unwrap()));
+        let y_data = Rc::new(RefCell::new(DevicePtr::new(DTYPE.clone(), 4 * 512 * 32 * 32).unwrap()));
         let outp = Rc::new(RefCell::new(Tensor::new(Box::new(LayerShape::from_nchw(4, 512, 32, 32)), y_data.clone()).unwrap()));
     
         let handle = Rc::new(cudnnCreate().unwrap());

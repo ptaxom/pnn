@@ -1,5 +1,5 @@
 use crate::cudnn::{cudnnCreate, cudnnHandle_t, cudnnDataType};
-use crate::nn::{DetectionsParser, BoundingBox, RuntimeError, BuildError};
+use crate::nn::{DetectionsParser, RuntimeError, BuildError};
 use crate::cudnn::{DevicePtr};
 use crate::nn::ops::{LayerOp, OutputTensor};
 use crate::nn::Engine;

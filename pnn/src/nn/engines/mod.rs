@@ -1,7 +1,5 @@
-use crate::nn::shape::*;
 use crate::nn::errors::*;
-use crate::nn::ops::{LayerOp, OutputTensor};
-use crate::cudnn::{DevicePtr, cudnnDataType};
+use crate::cudnn::{DevicePtr};
 use crate::nn::BoundingBox;
 
 use std::{

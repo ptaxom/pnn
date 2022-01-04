@@ -1,5 +1,5 @@
 use crate::cudnn::{cudnnDataType};
-use crate::nn::{DetectionsParser, BoundingBox, RuntimeError, BuildError, Shape, ActivationType};
+use crate::nn::{DetectionsParser, RuntimeError, BuildError, Shape, ActivationType};
 use crate::cudnn::{DevicePtr};
 use crate::nn::Engine;
 
@@ -262,7 +262,7 @@ impl TRTEngine {
             unsafe {
                 info = pnn_sys::engine_get_info(engine, i);
             }
-            use std::ffi::{CStr, CString};
+            use std::ffi::{CStr};
             let c_name: &CStr = unsafe {CStr::from_ptr(info.name)};
             let name = c_name.to_str().unwrap().to_owned();
 

@@ -11,9 +11,9 @@ use std::{
 use crate::nn::shape::*;
 use crate::nn::{Layer, LayerType, errors::*, ActivationType, BuildInformation};
 use crate::parsers::{DeserializationError, parse_numerical_field};
-use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
+use crate::cudnn::{Tensor, DevicePtr};
 use crate::nn::ops::{LayerOp, OutputTensor, ConvolutionOp, BatchnormOp, ActivationOp, BiasOp};
-use crate::nn::{CUDNNEngine, Engine, TRTBuilder};
+use crate::nn::{CUDNNEngine, TRTBuilder};
 
 type F32Vec = Vec<f32>;
 const FUSE_CONV_BATCHNORM: bool = true;

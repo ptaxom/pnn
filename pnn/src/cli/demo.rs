@@ -1,6 +1,6 @@
 use crate::nn::{BoundingBox, BuildError, Network};
 use crate::cudnn::cudnnDataType;
-use std::os::raw::{c_void, c_int, c_char};
+use std::os::raw::{c_void};
 use std::time::{Instant};
 extern crate libc;
 use std::mem;
@@ -79,8 +79,10 @@ pub fn demo(video_path: String,
             })?;
         }
         let i_ptr = net.get_input_ptr().borrow_mut().ptr() as *mut std::os::raw::c_void;
-        println!("Builded yolo");
+        println!("Loaded yolo engine");
         net.set_detections_ops(threshold, nms_threshold);
+        let c_output_isnull = output.is_none();
+        let c_output_ptr = std::ffi::CString::new(output.unwrap_or(String::from("default.avi"))).unwrap();
         
         let stats;
         unsafe {
@@ -91,7 +93,9 @@ pub fn demo(video_path: String,
                 net.get_size().0,
                 i_ptr,
                 std::ptr::addr_of!(net) as *mut c_void,
-                infer_call
+                infer_call,
+                if c_output_isnull {std::ptr::null()} else {c_output_ptr.as_ptr()},
+                show
                 );
         }
     println!("Stats for      {}", video_path);

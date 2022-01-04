@@ -10,8 +10,8 @@ use std::{
 use crate::nn::shape::*;
 use crate::nn::{Layer, LayerType, errors::*, BuildInformation};
 use crate::parsers::{DeserializationError, parse_numerical_field, ensure_positive};
-use crate::cudnn::{cudnnHandle_t, cudnnDataType, Tensor, DevicePtr};
-use crate::nn::ops::{LayerOp, OutputTensor, UpsampleOp};
+use crate::cudnn::{Tensor, DevicePtr};
+use crate::nn::ops::{LayerOp, UpsampleOp};
 use crate::nn::{CUDNNEngine, TRTBuilder};
 
 

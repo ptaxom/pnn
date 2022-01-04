@@ -79,7 +79,7 @@ public:
 
 class DetectionRenderer : public DataProcesser {
 public:
-    virtual bool postprocess(cv::Mat &image, std::vector<BoundingBox> &boxes) {
+    virtual bool postprocess(cv::Mat &image, std::vector<BoundingBox> &boxes) override{
         draw_bboxes(image, boxes, class_names_);
         cv::imshow("demo", image);
         char key = (char)cv::waitKey(1);
@@ -94,10 +94,11 @@ private:
 
 class FileRenderer : public DataProcesser {
 public:
-    virtual bool postprocess(cv::Mat image, std::vector<BoundingBox> &boxes) {
+    virtual bool postprocess(cv::Mat &image, std::vector<BoundingBox> &boxes) override {
         draw_bboxes(image, boxes, class_names_);
         if (!writer_) {
-            writer_ = new cv::VideoWriter("../models/demo.avi", cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), 25, image.size());
+            std::cout << "SAve to " << outputPath_ << std::endl;
+            writer_ = new cv::VideoWriter(outputPath_, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), 30, image.size());
             if (!writer_ || !writer_->isOpened()) {
                 return true;
             }
@@ -106,7 +107,7 @@ public:
         return false;
     }
 
-    FileRenderer(const std::vector<std::string> &class_names): DataProcesser(), class_names_(class_names) {}
+    FileRenderer(const std::vector<std::string> &class_names, const std::string& path): DataProcesser(), class_names_(class_names), outputPath_(path) {}
     
     ~FileRenderer() {
         if (writer_) {
@@ -118,6 +119,7 @@ public:
 private:
     std::vector<std::string> class_names_;
     cv::VideoWriter *writer_ = nullptr;
+    std::string outputPath_;
 };
 
 template<typename T>
@@ -201,7 +203,7 @@ class ThreadedProcesser {
 public:
 
     ThreadedProcesser(DataLoader *loader, 
-                      DataProcesser *processer,
+                      const std::vector<DataProcesser*> &processers,
                       size_t batchsize,
                       size_t width,
                       size_t height,
@@ -209,7 +211,7 @@ public:
                       void* model_ptr,
                       BoundingBox* (*inference_call)(void* model, size_t *n_boxes, double *infer_time)
                       ): 
-        loader_(loader), processer_(processer), batchsize_(batchsize),
+        loader_(loader), processers_(processers), batchsize_(batchsize),
         width_(width), height_(height), inp_ptr_(static_cast<float*>(inp_ptr)),
         downloaded_(false), model_ptr_(model_ptr),
         inference_call_(inference_call),
@@ -373,7 +375,8 @@ private:
                 exited_ = true;
                 break;
             }
-            exited_ = processer_->postprocess(task->original, task->boxes);
+            for(const auto& processor: processers_ )
+                exited_ |= processor->postprocess(task->original, task->boxes);
             task.reset();
             if (exited_)
                 break;
@@ -382,7 +385,7 @@ private:
 
 private:
     DataLoader* loader_;
-    DataProcesser* processer_;
+    std::vector<DataProcesser*> processers_;
     size_t batchsize_;
     size_t width_;
     size_t height_;
@@ -415,15 +418,22 @@ InferStats visual_demo(const char* video_path,
                  size_t height,
                  void* inp_ptr,
                  void* model_ptr,
-                 BoundingBox* (*infer_call)(void* model, size_t *n_boxes, double *infer_time)
+                 BoundingBox* (*infer_call)(void* model, size_t *n_boxes, double *infer_time),
+                 const char* output_path,
+                 bool show
                  ) {
     DataLoader *loader = new VideoLoader(video_path);
-    DataProcesser *processer = new DetectionRenderer(load_classes(c_classes));
-    ThreadedProcesser worker(loader, processer, batchsize, width, height, inp_ptr, model_ptr, infer_call);
+    std::vector<DataProcesser*> processors;
+    if (show)
+        processors.push_back(new DetectionRenderer(load_classes(c_classes)));
+    if (output_path)
+        processors.push_back(new FileRenderer(load_classes(c_classes), output_path));
+    ThreadedProcesser worker(loader, processors, batchsize, width, height, inp_ptr, model_ptr, infer_call);
     worker.start();
     worker.join();
-    auto stats = worker.stats(); 
-    delete processer;
+    auto stats = worker.stats();
+    for(auto &processor: processors)
+        delete processor;
     delete loader;
     return stats;
 }

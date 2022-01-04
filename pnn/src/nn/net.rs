@@ -6,8 +6,7 @@ use std::{
 };
 use crate::parsers::*;
 use crate::nn::errors::*;
-use crate::cudnn::{cudnnHandle_t, cudnnCreate, cudnnDataType, cudaDeviceSynchronize, DevicePtr};
-use crate::nn::ops::*;
+use crate::cudnn::{cudnnDataType, cudaDeviceSynchronize, DevicePtr};
 use crate::nn::{BoundingBox};
 use crate::nn::{Engine, CUDNNEngine, TRTBuilder, TRTEngine};
 
@@ -244,13 +243,17 @@ impl Network {
             .stmts(statements)
             .build()
             .unwrap();
-        write(dot_path, graph.to_string().replace("\"", ""))?;
+        write(&dot_path, graph.to_string().replace("\"", "")).map_err(|e| {
+            std::io::Error::new(e.kind(), format!("{}[{}]", &e, &dot_path))
+        })?;
         Ok(())
     }
 
-    fn set_batchsize(&mut self, batch: usize) -> Result<(), BuildError> {
-        if let Some(_) = self.batchsize {
-            return Err(BuildError::Rebuild(String::from("Batchsize already setted")))
+    fn set_batchsize(&mut self, batch: usize, allow_override: bool) -> Result<(), BuildError> {
+        if allow_override == false {
+            if let Some(_) = self.batchsize {
+                return Err(BuildError::Rebuild(String::from("Batchsize already setted")))
+            }
         }
         self.batchsize = Some(batch);
 
@@ -283,7 +286,7 @@ impl Network {
         if self.batchsize.is_some() || self.engine.is_some() {
             return Err(BuildError::Runtime(RuntimeError::Other(String::from("Engine is builded"))))
         }
-        self.set_batchsize(batchsize)?;
+        self.set_batchsize(batchsize, false)?;
         if let Some(path) = weights {
             self.load_darknet_weights(&path)?
         }
@@ -316,6 +319,11 @@ impl Network {
         let mut engine = TRTEngine::new(engine_path).map_err(|e| {
             BuildError::Runtime(e)
         })?;
+
+        if self.batchsize.is_none() || self.batchsize.unwrap() != engine.batchsize() {
+            eprintln!("[WARNING] CLI Batchsize not equal to engine batchsize. Changing to {}", engine.batchsize());
+            self.set_batchsize(engine.batchsize(), true)?;
+        }
         for i in 0..self.layers.len() {
             let layer = self.layers[i].borrow();
             if layer.ltype() == LayerType::Yolo {
@@ -335,34 +343,30 @@ impl Network {
     }
 
     pub fn build_trt(&mut self, batchsize: usize, data_type: cudnnDataType, weights_path: &String, engine_path: Option<String>) -> Result<(), BuildError> {
-        if self.batchsize.is_some() || self.engine.is_some() {
+        if self.engine.is_some() {
             return Err(BuildError::Runtime(RuntimeError::Other(String::from("Engine is builded"))))
         }
-        self.set_batchsize(batchsize)?;
         let engine_path: String = engine_path.unwrap();
 
-        let rebuild = false;
-        if rebuild {
-            self.load_darknet_weights(weights_path)?;
-            let builder = Rc::new(RefCell::new(TRTBuilder::new(data_type.clone(), self.batchsize.unwrap(), self.size)?));
-        
-            {   // Allocate tensors for first layer
-                let mut first_layer = self.layers[0].borrow_mut();
-                first_layer.build_trt(builder.clone(), vec![])?;
-            }
+        self.set_batchsize(batchsize, false)?;
+        self.load_darknet_weights(weights_path)?;
+        let builder = Rc::new(RefCell::new(TRTBuilder::new(data_type.clone(), self.batchsize.unwrap(), self.size)?));
     
-            for i in 1..self.layers.len() {
-                let mut indeces = Vec::new();
-                for (col, link) in self.adjency_matrix[i].iter().enumerate() {
-                    if *link == Link::Backward {
-                        indeces.insert(0, col);
-                    }
-                }
-                self.layers[i].borrow_mut().build_trt(builder.clone(), indeces)?;
-            }
-            builder.borrow_mut().build(1, 1, &engine_path)?;
+        {   // Allocate tensors for first layer
+            let mut first_layer = self.layers[0].borrow_mut();
+            first_layer.build_trt(builder.clone(), vec![])?;
         }
 
+        for i in 1..self.layers.len() {
+            let mut indeces = Vec::new();
+            for (col, link) in self.adjency_matrix[i].iter().enumerate() {
+                if *link == Link::Backward {
+                    indeces.insert(0, col);
+                }
+            }
+            self.layers[i].borrow_mut().build_trt(builder.clone(), indeces)?;
+        }
+        builder.borrow_mut().build(1, 1, &engine_path)?;
         Ok(())
     }
 
@@ -478,8 +482,6 @@ impl Network {
 
     pub fn load_bin(&self, bin_path: &String) -> Result<(), RuntimeError>  {
         self.check_inited()?;
-        let mut layer = self.layers[0].borrow_mut();
-        let input_layer = layer.as_any_mut().downcast_mut::<InputLayer>().unwrap();
         self.get_input_ptr().borrow_mut().load_bin(bin_path)?;
         Ok(())
     }

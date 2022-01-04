@@ -1,4 +1,4 @@
-use crate::cudnn::{Tensor,
+use crate::cudnn::{
     cudnnHandle_t,
     cudnnFilterDescriptor_t,
     cudnnCreateFilterDescriptor,
@@ -18,7 +18,6 @@ use crate::nn::{LayerOp, RuntimeError, InputTensor, OutputTensor};
 
 use std::{
     rc::Rc,
-    cell::RefCell,
     mem::MaybeUninit,
     ptr::addr_of,
     os::raw::{c_void, c_int}
@@ -216,6 +215,10 @@ mod tests {
     fn base_test() {
         use crate::cudnn::*;
         use crate::nn::LayerShape;
+        use std::{
+            rc::Rc,
+            cell::RefCell,
+        };
 
         let dtype = cudnnDataType::FLOAT;
         let x_data = Rc::new(RefCell::new(DevicePtr::new(dtype.clone(), 4 * 3 * 416 * 416).unwrap()));

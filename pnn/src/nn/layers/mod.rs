@@ -8,10 +8,8 @@ use std::{
 
 use crate::nn::shape::*;
 use crate::nn::errors::*;
-use crate::nn::{Engine, CUDNNEngine, BuildInformation, TRTBuilder};
-use crate::nn::ops::{LayerOp, OutputTensor};
+use crate::nn::{CUDNNEngine, TRTBuilder};
 use crate::parsers::DeserializationError;
-use crate::cudnn::{cudnnHandle_t, cudnnDataType};
 
 pub trait Layer {
     fn name(&self) -> String;

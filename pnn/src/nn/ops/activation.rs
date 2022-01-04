@@ -1,19 +1,17 @@
-use crate::cudnn::{Tensor,
+use crate::cudnn::{
     cudnnHandle_t,
     cudnnDataType,
-    DevicePtr,
     cudnnError,
     cudaError,
     Scale,
     cudnnGetStream,
     cudaStream_t
 };
-use crate::nn::{LayerOp, RuntimeError, InputTensor, OutputTensor, ActivationType};
+use crate::nn::{LayerOp, RuntimeError, OutputTensor, ActivationType};
 
 use std::{
     rc::Rc,
-    cell::RefCell,
-    os::raw::{c_void, c_int}
+    os::raw::{c_void}
 };
 use pnn_sys::{cudaError_t, cudnnActivationDescriptor_t};
 type ExternCudaCall = fn(*mut c_void, usize, cudaStream_t) -> cudaError_t;
@@ -153,6 +151,10 @@ mod tests {
     fn test_act(activation: ActivationType) {
         use crate::cudnn::*;
         use crate::nn::LayerShape;
+        use std::{
+            rc::Rc,
+            cell::RefCell
+        };
 
         let dtype = cudnnDataType::FLOAT;
         let x_data = Rc::new(RefCell::new(DevicePtr::new(dtype.clone(), 4 * 64 * 416 * 416).unwrap()));

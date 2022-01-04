@@ -50,6 +50,8 @@ extern "C" {
         height: usize,
         inp_ptr: *mut c_void,
         model_ptr: *mut c_void,
-        infer_call: extern fn(*mut c_void, *mut usize, *mut f64) -> *mut c_void
+        infer_call: extern fn(*mut c_void, *mut usize, *mut f64) -> *mut c_void,
+        output: *const c_char,
+        show: bool
         ) -> InferStats;
 }

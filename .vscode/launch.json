@@ -9,7 +9,7 @@
             "request": "launch",
             "name": "Debug",
             "program": "${workspaceFolder}/target/debug/pnn",
-            "args": [],
+            "args": ["benchmark", "--trt", "--weights", "./yolo.engine", "-c", "./cfgs/tests/yolov4-csp.cfg", "--input", "../models/yolo_test.mp4", "-b", "4"],
             "cwd": "${workspaceFolder}",
             "env": {"RUST_BACKTRACE": "1", "LD_LIBRARY_PATH": "/usr/local/lib"}
         }

@@ -1,6 +1,5 @@
-use crate::cudnn::{Tensor,
+use crate::cudnn::{
     cudnnHandle_t,
-    cudnnDataType,
     cudnnError,
     Scale
 };
@@ -9,7 +8,6 @@ use crate::nn::{LayerOp, RuntimeError, InputTensor, OutputTensor};
 
 use std::{
     rc::Rc,
-    cell::RefCell,
     os::raw::{c_void}
 };
 
@@ -67,12 +65,16 @@ mod tests {
     fn base_test() {
         use crate::cudnn::*;
         use crate::nn::LayerShape;
-        const dtype: cudnnDataType = cudnnDataType::FLOAT;
+        const DTYPE: cudnnDataType = cudnnDataType::FLOAT;
+        use std::{
+            rc::Rc,
+            cell::RefCell
+        };
         
-        let x_data = Rc::new(RefCell::new(DevicePtr::new(dtype.clone(), 4 * 512 * 16 * 16).unwrap()));
+        let x_data = Rc::new(RefCell::new(DevicePtr::new(DTYPE.clone(), 4 * 512 * 16 * 16).unwrap()));
         let inp = Rc::new(RefCell::new(Tensor::new(Box::new(LayerShape::from_nchw(4, 512, 16, 16)), x_data.clone()).unwrap()));
 
-        let y_data = Rc::new(RefCell::new(DevicePtr::new(dtype.clone(), 4 * 512 * 16 * 16).unwrap()));
+        let y_data = Rc::new(RefCell::new(DevicePtr::new(DTYPE.clone(), 4 * 512 * 16 * 16).unwrap()));
         let outp = Rc::new(RefCell::new(Tensor::new(Box::new(LayerShape::from_nchw(4, 512, 16, 16)), y_data.clone()).unwrap()));
     
         let handle = Rc::new(cudnnCreate().unwrap());

@@ -1,7 +1,4 @@
 use clap::{Parser, Subcommand};
-use crate::nn::{
-    BuildError
-};
 use crate::cudnn::{
     cudnnDataType
 };
@@ -48,19 +45,19 @@ enum Commands {
         show: bool,
 
         /// Build HALF precision engine
-        #[clap(short, long)]
+        #[clap(long)]
         half: bool,
 
         /// Confidence threshold
-        #[clap(short, long, default_value_t = 0.45)]
+        #[clap(long, default_value_t = 0.45)]
         threshold: f32,
 
         /// Confidence threshold
-        #[clap(short, long, default_value_t = 0.45)]
+        #[clap(long, default_value_t = 0.45)]
         iou_tresh: f32,
 
         /// Confidence threshold
-        #[clap(short, long, default_value_t = String::from("./cfgs/tests/coco.names"))]
+        #[clap(long, default_value_t = String::from("./cfgs/tests/coco.names"))]
         classes_file: String
     },
     /// Build TensorRT engine file
@@ -82,7 +79,7 @@ enum Commands {
         output: Option<String>,
 
         /// Build HALF precision engine
-        #[clap(short, long)]
+        #[clap(long)]
         half: bool
     }
 }
