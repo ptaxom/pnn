@@ -97,7 +97,6 @@ public:
     virtual bool postprocess(cv::Mat &image, std::vector<BoundingBox> &boxes) override {
         draw_bboxes(image, boxes, class_names_);
         if (!writer_) {
-            std::cout << "SAve to " << outputPath_ << std::endl;
             writer_ = new cv::VideoWriter(outputPath_, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), 30, image.size());
             if (!writer_ || !writer_->isOpened()) {
                 return true;

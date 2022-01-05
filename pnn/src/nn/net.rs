@@ -132,8 +132,8 @@ impl Network {
         Ok(())
     }
 
-    pub fn from_darknet(darknet_cfg: &String) -> Result<Self, BuildError> {
-        let config = parse_file(darknet_cfg)?;
+    pub fn from_darknet(darknet_cfg: impl AsRef<str>) -> Result<Self, BuildError> {
+        let config = parse_file(darknet_cfg.as_ref())?;
         if config.len() < 2 {
             return Err(
                 BuildError::Deserialization(DeserializationError(String::from("Network must contain at least input and output layers")))
@@ -199,7 +199,7 @@ impl Network {
         self.detection_ops = Some((threshold, nms_threshold));
     }
 
-    pub fn render(&self, dot_path: String) -> Result<(), std::io::Error> {
+    pub fn render(&self, dot_path: impl AsRef<str>) -> Result<(), std::io::Error> {
         use tabbycat::attributes::*;
         use tabbycat::{AttrList, GraphBuilder, GraphType, Identity, StmtList, Edge};
         use std::fs::write;
@@ -243,13 +243,13 @@ impl Network {
             .stmts(statements)
             .build()
             .unwrap();
-        write(&dot_path, graph.to_string().replace("\"", "")).map_err(|e| {
-            std::io::Error::new(e.kind(), format!("{}[{}]", &e, &dot_path))
+        write(dot_path.as_ref(), graph.to_string().replace("\"", "")).map_err(|e| {
+            std::io::Error::new(e.kind(), format!("{}[{}]", &e, dot_path.as_ref()))
         })?;
         Ok(())
     }
 
-    fn set_batchsize(&mut self, batch: usize, allow_override: bool) -> Result<(), BuildError> {
+    pub fn set_batchsize(&mut self, batch: usize, allow_override: bool) -> Result<(), BuildError> {
         if allow_override == false {
             if let Some(_) = self.batchsize {
                 return Err(BuildError::Rebuild(String::from("Batchsize already setted")))
