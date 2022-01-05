@@ -1,6 +1,9 @@
 # pnn
 
-pnn is [Darknet](https://github.com/alexeyAB/darknet) compatible neural nets inference engine implemented in Rust. By optimizing  was achivied significant performance increment.
+pnn is [Darknet](https://github.com/alexeyAB/darknet) compatible neural nets inference engine implemented in Rust. By optimizing  was achivied significant performance increment(especially in FP16 mode). _pnn_ provide CUDNN-based and TensorRT-based inference engines.
+<center>
+<img src="assets/result.gif">
+</center>
 
 ## FPS Performance
 Performance is measured at RTX 3070Ti, TensorRT v8.2.1, CUDNN v8.3.0, NVCC/CUDA Runtime 11.5, SM=80. For fair comparison was used [tkDNN](https://github.com/ceccocats/tkDNN) from _tensorrt8_ branch. 
@@ -8,9 +11,9 @@ Performance is measured at RTX 3070Ti, TensorRT v8.2.1, CUDNN v8.3.0, NVCC/CUDA 
     | Configuration | Darknet    |  tkDNN         | pnn + CUDNN   | pnn + TensorRT |
     | :------:      | :-----:    | :-----:        | :-----:       | :-----:        |
     | BS=1, FP32    |  87.8      | 98.2(112.9**)  | 98.1(107.0**) | __108.7(119.6**)__
-    | BS=1, FP16    |  99.9*     | 221.2(359.0**) | 159(183.7**)  | __197.3(238.0**)__
-    | BS=4, FP32    |    -       | 121.0(141.1**) | 117.4(517**)  | __130.1(145.1**)__
-    | BS=4, FP16    |    -       | 268.3(493.4**) | 193.2(228.3**)| __230.7(1150.5**)__
+    | BS=1, FP16    |  99.9*     | __221.2(359.0**)__ | 159(183.7**)  | 197.3(238.0**)
+    | BS=4, FP32    |    -       | 121.0(129.3**) | 117.4(517**)  | __130.1(590.0**)__
+    | BS=4, FP16    |    -       | 268.3(493.4**) | 193.2(869.0**)| __230.7(1150.5**)__
 - <details>
   <summary><b>YOLOv4 416x416[WIP]</b></summary>
   <br>
@@ -143,3 +146,13 @@ Performance is measured at RTX 3070Ti, TensorRT v8.2.1, CUDNN v8.3.0, NVCC/CUDA 
 - CUDNN ≥ 8
 - TensorRT ≥ 8
 - OpenCV ≥ 4.4
+
+## Roadmap
+- [x] CUDNN FP32 Support
+- [x] dot files render
+- [x] TensorRT FP32 Support
+- [x] FP16 mode
+- [] Python bindings
+- [] Releases & packages for Rust/C++/Python
+- [] INT8 support
+- [] Refitting engine
