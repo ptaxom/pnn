@@ -54,6 +54,7 @@ pub fn demo(video_path: String,
         let classes = crate::parsers::load_classes(&classes_file).map_err( |e| {
             BuildError::Io(e)
         })?;
+        let mut batchsize = batchsize;
 
         let c_video_path = std::ffi::CString::new(video_path.clone()).unwrap();
         let ffi_classes: Vec<std::ffi::CString> = classes.iter().map(|x| {
@@ -71,6 +72,7 @@ pub fn demo(video_path: String,
             net.build_cudnn(batchsize, data_type.clone(), Some(weight_path.clone()))?;
         } else {
             net.load_trt(&weight_path)?;
+            batchsize = net.get_batchsize().unwrap();
         }
         // Warm-up
         for _ in 0..5 {
@@ -102,8 +104,8 @@ pub fn demo(video_path: String,
     println!("Data type:     {}", data_type);
     println!("Batchsize:     {}", batchsize);
     println!("Total frames:  {}", stats.total_frames());
-    println!("FPS:           {}", stats.fps());
-    println!("INF+NMS FPS:   {}", stats.nms_fps(batchsize));
-    println!("Inference FPS: {}", stats.infer_fps(batchsize));
+    println!("FPS:           {:.02}", stats.fps());
+    println!("INF+NMS FPS:   {:.02}", stats.nms_fps(batchsize));
+    println!("Inference FPS: {:.02}", stats.infer_fps(batchsize));
     Ok(())
 }

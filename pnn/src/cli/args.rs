@@ -81,7 +81,25 @@ enum Commands {
         /// Build HALF precision engine
         #[clap(long)]
         half: bool
+    },
+    /// Build dot graph of model
+    Dot {
+        /// Path to config
+        #[clap(short, long)]
+        config: String,
+        /// Output dot file
+        #[clap(short, long)]
+        output: String,
     }
+}
+
+pub fn build_dot(config: impl AsRef<str>, output: impl AsRef<str>) -> Result<(), crate::nn::BuildError> {
+    let mut net = crate::nn::Network::from_darknet(config.as_ref())?;
+    net.set_batchsize(1, false)?;
+    net.render(output.as_ref()).map_err(|e| {
+        crate::nn::BuildError::Io(e)
+    })?;
+    Ok(())
 }
 
 pub fn build_engine(weights: String, config: String, batchsize: usize, output: Option<String>, half: bool) -> Result<(), crate::nn::BuildError> {
@@ -98,8 +116,8 @@ pub fn build_engine(weights: String, config: String, batchsize: usize, output: O
 
 pub fn parse() {
     let args = Args::parse();
-    match args.command {
-        Commands::Build{weights, config, batchsize, output, half} => build_engine(weights, config, batchsize, output, half).unwrap(),
+    let err = match args.command {
+        Commands::Build{weights, config, batchsize, output, half} => build_engine(weights, config, batchsize, output, half),
         Commands::Benchmark{trt, weights, config, batchsize, output, half, input, show, threshold, iou_tresh, classes_file} => crate::cli::demo(
             input, 
             config, 
@@ -111,6 +129,10 @@ pub fn parse() {
             iou_tresh,
             show,
             output, 
-            trt).unwrap()
+            trt),
+        Commands::Dot{config, output} => build_dot(&config, &output)
+    };
+    if let Err(e) = err {
+        eprintln!("{}", e);
     }
 }
