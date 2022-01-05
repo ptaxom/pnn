@@ -1,6 +1,6 @@
 # pnn
 
-pnn is [Darknet](https://github.com/alexeyAB/darknet) compatible neural nets inference engine implemented in Rust. By optimizing  was achivied significant performance increment(especially in FP16 mode). _pnn_ provide CUDNN-based and TensorRT-based inference engines.
+pnn is [Darknet](https://github.com/alexeyAB/darknet) compatible neural nets inference engine implemented in Rust. By optimizing  was achieved significant performance increment(especially in FP16 mode). _pnn_ provide CUDNN-based and TensorRT-based inference engines.
 <center>
 <img src="assets/result.gif">
 </center>
@@ -56,8 +56,10 @@ Performance is measured at RTX 3070Ti, TensorRT v8.2.1, CUDNN v8.3.0, NVCC/CUDA 
         <td>N/A</td>        
     </tr>
   </table>
-
   </details>
+\* - Actually, Darknet hasnt FP16 mode, it operate in mixed precision
+
+\*\* - Main value is full inference time, including reading, preprocessing and postprocessing. Value in brackets is clear inference time. During benchmark nor of Darknet, tkDNN or pnn doesnt render video to screen/file. If perform benchmark with render you will get 3-5% decreasing for pnn/Darknet with multithreaded loader/renderer and ~30% for tkDNN with single threaded renderer.
 ## Usage
 - To build TensorRT engine use
     ```bash
@@ -152,7 +154,7 @@ Performance is measured at RTX 3070Ti, TensorRT v8.2.1, CUDNN v8.3.0, NVCC/CUDA 
 - [x] dot files render
 - [x] TensorRT FP32 Support
 - [x] FP16 mode
-- [] Python bindings
-- [] Releases & packages for Rust/C++/Python
-- [] INT8 support
-- [] Refitting engine
+- [ ] Python bindings
+- [ ] Releases & packages for Rust/C++/Python
+- [ ] INT8 support
+- [ ] Refitting engine
