@@ -1,4 +1,4 @@
-#include "mish.h"
+#include "kernels.h"
 
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -49,16 +49,30 @@ __device__ float mish(float x) {
 }
 
 template<typename T>
-__global__ void activation_mish_kernel(const T* input, T* output, int elements) {
+__device__ T leaky(T x) {
+    if (x <= 0)
+        return x * .1f;
+    return x;
+}
+
+template<>
+__device__ __half leaky(__half x) {
+    if (__hle(x, 0.))
+        return __hmul(x, .1f);
+    return x;
+}
+
+template<typename T, T (*F)(T)>
+__global__ void activation_kernel(const T* input, T* output, int elements) {
     int i = (blockIdx.x + blockIdx.y*gridDim.x) * blockDim.x + threadIdx.x;
     if (i < elements) {
-        output[i] = mish<T>(input[i]);
+        output[i] = F(input[i]);
     }
 }
 
-template<typename T>
-cudaError_t activation_mish(cudaStream_t stream, size_t elements, const void* input, void* output) {
-    activation_mish_kernel<T><<<get_gridsize(elements), BLOCK_SIZE, 0, stream >>>(
+template<typename T, T (*F)(T)>
+cudaError_t activation(cudaStream_t stream, size_t elements, const void* input, void* output) {
+    activation_kernel<T, F><<<get_gridsize(elements), BLOCK_SIZE, 0, stream >>>(
         static_cast<const T*>(input), 
         static_cast<T*>(output), 
         static_cast<int>(elements)
@@ -67,10 +81,18 @@ cudaError_t activation_mish(cudaStream_t stream, size_t elements, const void* in
 }
 }
 
+cudaError_t activation_leaky_fp16(cudaStream_t stream, size_t elements, const void* input, void* output){
+    return activation<__half, leaky>(stream, elements, input, output);
+}
+
+cudaError_t activation_leaky_fp32(cudaStream_t stream, size_t elements, const void* input, void* output){
+    return activation<float, leaky>(stream, elements, input, output);
+}
+
 cudaError_t trt_activation_mish_fp32(cudaStream_t stream, size_t elements, const void* input, void* output) {
-    return activation_mish<float>(stream, elements, input, output);
+    return activation<float, mish>(stream, elements, input, output);
 }
 
 cudaError_t trt_activation_mish_fp16(cudaStream_t stream, size_t elements, const void* input, void* output) {
-    return activation_mish<half>(stream, elements, input, output);
+    return activation<half, mish>(stream, elements, input, output);
 }

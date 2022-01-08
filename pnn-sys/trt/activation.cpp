@@ -26,7 +26,7 @@ T readFromBuffer(const char*& buffer)
 
 namespace {
 const char* ACTIVATION_PLUGIN_VERSION{"1"};
-const char* ACTIVATION_PLUGIN_NAME{"YOLOMishPlugin"};
+const char* ACTIVATION_PLUGIN_NAME{"YOLOActivationPlugins"};
 }
 
 PluginFieldCollection ActivationCreator::mFC{};
@@ -96,10 +96,20 @@ int ActivationPlugin::enqueue(int batchSize, const void* const* inputs, void* co
     void* output = outputs[0];
 
     // Launch CUDA kernel wrapper and save its return value
-    if (mOpType == DataType::kHALF) {
+    if (mActivation == MISH) {
+        if (mOpType == DataType::kHALF) {
         status = trt_activation_mish_fp16(stream, mInputVolume * batchSize, inputs[0], output);
+        } else {
+            status = trt_activation_mish_fp32(stream, mInputVolume * batchSize, inputs[0], output);
+        }
+    } else if (mActivation == LEAKY) {
+        if (mOpType == DataType::kHALF) {
+        status = activation_leaky_fp16(stream, mInputVolume * batchSize, inputs[0], output);
+        } else {
+            status = activation_leaky_fp32(stream, mInputVolume * batchSize, inputs[0], output);
+        }
     } else {
-        status = trt_activation_mish_fp32(stream, mInputVolume * batchSize, inputs[0], output);
+        assert(false && "Unsupported function");
     }
 
     return status;
@@ -234,9 +244,12 @@ const PluginFieldCollection* ActivationCreator::getFieldNames() noexcept
 IPluginV2* ActivationCreator::createPlugin(const char* name, const PluginFieldCollection* fc) noexcept
 {
     if (strcmp(name, "mish") == 0) {
-        //TODO: Is it necessary??
         return new ActivationPlugin(name, MISH);
     }
+    if (strcmp(name, "leaky") == 0) {
+        return new ActivationPlugin(name, LEAKY);
+    }
+    assert(false && "Unsupported activation");
     return nullptr;
 }
 

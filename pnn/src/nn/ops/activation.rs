@@ -49,6 +49,24 @@ fn safe_mish_fp64(data: *mut c_void, elements: usize, stream: cudaStream_t) -> c
     }
 }
 
+fn safe_leaky_fp16(data: *mut c_void, elements: usize, stream: cudaStream_t) -> cudaError_t {
+    unsafe {
+        return pnn_sys::activation_leaky_fp16(data, elements, stream);
+    }
+}
+
+fn safe_leaky_fp32(data: *mut c_void, elements: usize, stream: cudaStream_t) -> cudaError_t {
+    unsafe {
+        return pnn_sys::activation_leaky_fp32(data, elements, stream);
+    }
+}
+
+fn safe_leaky_fp64(data: *mut c_void, elements: usize, stream: cudaStream_t) -> cudaError_t {
+    unsafe {
+        return pnn_sys::activation_leaky_fp64(data, elements, stream);
+    }
+}
+
 // TODO: Move bindings to place of use
 impl ActivationOp {
     pub fn new(context: Rc<cudnnHandle_t>,
@@ -65,35 +83,50 @@ impl ActivationOp {
         let mut stream = None;
         let mut cudnn_act_desc = None;
 
-        if activation == ActivationType::Mish {
-            cuda_func = Some(match data_type {
-                cudnnDataType::HALF => safe_mish_fp16,
-                cudnnDataType::FLOAT => safe_mish_fp32,
-                cudnnDataType::DOUBLE => safe_mish_fp64,
-                _ => return Err(RuntimeError::Other(String::from("Unsupported data type for Mish activation")))
-            });
-            stream = Some(cudnnGetStream(*context.as_ref()).map_err(|e| {
-                RuntimeError::Cudnn(e)
-            })?);
-        } else if activation == ActivationType::Logistic {
-            unsafe {
-                let mut act_desc: cudnnActivationDescriptor_t = std::ptr::null_mut() as cudnnActivationDescriptor_t;
-                let res = pnn_sys::cudnnCreateActivationDescriptor(&mut act_desc as *mut cudnnActivationDescriptor_t);
-                if res != 0 {
-                    return Err(RuntimeError::Cudnn(cudnnError::from(res)));
+        match activation {
+            ActivationType::Mish => {
+                cuda_func = Some(match data_type {
+                    cudnnDataType::HALF => safe_mish_fp16,
+                    cudnnDataType::FLOAT => safe_mish_fp32,
+                    cudnnDataType::DOUBLE => safe_mish_fp64,
+                    _ => return Err(RuntimeError::Other(String::from("Unsupported data type for Mish activation")))
+                });
+                stream = Some(cudnnGetStream(*context.as_ref()).map_err(|e| {
+                    RuntimeError::Cudnn(e)
+                })?);
+            },
+            ActivationType::Logistic => {
+                unsafe {
+                    let mut act_desc: cudnnActivationDescriptor_t = std::ptr::null_mut() as cudnnActivationDescriptor_t;
+                    let res = pnn_sys::cudnnCreateActivationDescriptor(&mut act_desc as *mut cudnnActivationDescriptor_t);
+                    if res != 0 {
+                        return Err(RuntimeError::Cudnn(cudnnError::from(res)));
+                    }
+                    cudnn_act_desc = Some(act_desc);
+    
+                    let res = pnn_sys::cudnnSetActivationDescriptor(
+                        act_desc,
+                        pnn_sys::cudnnActivationMode_t_CUDNN_ACTIVATION_SIGMOID,
+                        pnn_sys::cudnnNanPropagation_t_CUDNN_NOT_PROPAGATE_NAN,
+                        0.
+                    );
+                    if res != 0 {
+                        return Err(RuntimeError::Cudnn(cudnnError::from(res)));
+                    }
                 }
-                cudnn_act_desc = Some(act_desc);
-
-                let res = pnn_sys::cudnnSetActivationDescriptor(
-                    act_desc,
-                    pnn_sys::cudnnActivationMode_t_CUDNN_ACTIVATION_SIGMOID,
-                    pnn_sys::cudnnNanPropagation_t_CUDNN_NOT_PROPAGATE_NAN,
-                    0.
-                );
-                if res != 0 {
-                    return Err(RuntimeError::Cudnn(cudnnError::from(res)));
-                }
-            }
+            },
+            ActivationType::Leaky => {
+                cuda_func = Some(match data_type {
+                    cudnnDataType::HALF => safe_leaky_fp16,
+                    cudnnDataType::FLOAT => safe_leaky_fp32,
+                    cudnnDataType::DOUBLE => safe_leaky_fp64,
+                    _ => return Err(RuntimeError::Other(String::from("Unsupported data type for Leaky activation")))
+                });
+                stream = Some(cudnnGetStream(*context.as_ref()).map_err(|e| {
+                    RuntimeError::Cudnn(e)
+                })?);
+            },
+            ActivationType::Linear => {}
         }
         
         let cond = cuda_func != None && cudnn_act_desc != None;

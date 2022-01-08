@@ -115,7 +115,8 @@ impl TRTBuilder {
         let act_name = match act {
             ActivationType::Linear => "linear",
             ActivationType::Mish => "mish",
-            ActivationType::Logistic => "logistic"
+            ActivationType::Logistic => "logistic",
+            ActivationType::Leaky => "leaky",
         };
         let name = std::ffi::CString::new(act_name).unwrap();
         unsafe {

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "trt.h"
-#include "mish.h"
+#include "kernels.h"
 
 #include <string>
 #include <vector>
@@ -10,7 +10,8 @@
 using namespace nvinfer1;
 
 typedef enum CustomActivationType_t {
-    MISH = 1,
+    MISH  = 1,
+    LEAKY = 2,
 } CustomActivationType;
 
 class ActivationPlugin : public IPluginV2Ext

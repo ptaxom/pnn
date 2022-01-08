@@ -90,7 +90,8 @@ impl From<&String> for LayerType {
 pub enum ActivationType {
     Linear,
     Mish,
-    Logistic
+    Logistic,
+    Leaky
 }
 
 
@@ -104,6 +105,8 @@ impl std::convert::TryFrom<&String> for ActivationType {
             return Ok(ActivationType::Mish)
         } else if layer_type == "logistic" {
             return Ok(ActivationType::Logistic)
+        } else if layer_type == "leaky" {
+            return Ok(ActivationType::Leaky)
         }
 
         Err(DeserializationError(format!("Couldnt parse activation from {}", layer_type)))

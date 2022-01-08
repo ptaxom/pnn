@@ -82,27 +82,38 @@ int TRTBuilder::addConvolution(size_t input_id,  int feature_maps, int kernel_si
     return addLayer(layer);
 }
 
+// #define OWN_LEAKY
+
 int TRTBuilder::addActivation(size_t input_id,  const std::string &activation_name) {
     ITensor* tensor = mLayers[input_id]->getOutput(0);
     if (!tensor) return -1;
 
     ILayer* layer = nullptr;
     
-    if (activation_name == "mish") {
-        IPluginCreator* creator = getPluginRegistry()->getPluginCreator("YOLOMishPlugin", "1", "");
+    if (activation_name == "mish" 
+    #ifdef OWN_LEAKY    
+        || activation_name == "leaky"
+    #endif
+    ) {
+        IPluginCreator* creator = getPluginRegistry()->getPluginCreator("YOLOActivationPlugins", "1", "");
         if (!creator) {
-            std::cerr << "Couldnt find Mish Plugin for YOLO" << std::endl;
+            std::cerr << "Couldnt find ActivationPlugin for YOLO" << std::endl;
             return -1;
         }
         PluginFieldCollection *pluginData = nullptr; // Unused
-        IPluginV2 *pluginObj = creator->createPlugin("mish", pluginData);
+        IPluginV2 *pluginObj = creator->createPlugin(activation_name.c_str(), pluginData);
 
         layer = mNetworkDefenition->addPluginV2(&tensor, 1, *pluginObj);
         if (!layer) return -1;
-        setLayerName(layer, "Mish");
+        setLayerName(layer, activation_name);
     } else if (activation_name == "logistic") {
         layer = mNetworkDefenition->addActivation(*tensor, ActivationType::kSIGMOID);
         if (!layer) return -1;
+        setLayerName(layer, "Logistic");
+    } else if (activation_name == "leaky") {
+        layer = mNetworkDefenition->addActivation(*tensor, ActivationType::kLEAKY_RELU);
+        if (!layer) return -1;
+        dynamic_cast<IActivationLayer*>(layer)->setAlpha(.1f);
         setLayerName(layer, "Logistic");
     } else if (activation_name == "linear") { 
         return mLayers.size() - 1;

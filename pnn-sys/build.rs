@@ -31,7 +31,7 @@ fn main() {
         .files(&["./cuda/mish.cu", "./cuda/upsample.cu", 
                  "./cuda/utils.cpp", "./cuda/convert.cu",
                  "./cuda/blas.cu", "./cuda/demo.cpp",
-                 "./trt/mish.cu",
+                 "./trt/kernels.cu", "./cuda/leaky.cu",
                  ])
         .compile("kernels.a");
 
@@ -43,7 +43,7 @@ fn main() {
                 "./trt/engine.hpp", "./trt/engine.cpp",
                 "./trt/utils.hpp", "./trt/utils.cpp",
                 "./trt/trt.h", "./trt/trt.cpp",
-                "./trt/mish.h",
+                "./trt/kernels.h",
         ])
         .compile("trt.a");
 
